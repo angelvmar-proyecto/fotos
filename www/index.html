@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +10,7 @@
             font-family: Arial, sans-serif;
             background: #25D366;
             padding: 15px;
+            min-height: 100vh;
         }
         .container {
             max-width: 800px;
@@ -136,7 +137,7 @@
 <body>
     <div class="container">
         <h1>📊 Lector de Tablas</h1>
-        <p style="text-align:center; color:#718096;">OCR REAL - Convierte capturas de Excel</p>
+        <p style="text-align:center; color:#718096;">Sube una captura de pantalla de Excel</p>
         
         <div id="statusLoading" style="background:#fef3c7; padding:10px; border-radius:8px; text-align:center; display:none;"></div>
         
@@ -176,7 +177,7 @@
         </div>
     </div>
     
-    <script src="libs/tesseract/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

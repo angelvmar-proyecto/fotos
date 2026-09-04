@@ -1,5 +1,5 @@
 // ============================================================
-//  LECTOR DE TABLAS - TESSERACT LOCAL (50MB APK)
+//  LECTOR DE TABLAS - TESSERACT REAL (SIN SIMULACIÓN)
 // ============================================================
 
 let currentImageFile = null;
@@ -8,7 +8,6 @@ let worker = null;
 let isProcessing = false;
 let tesseractReady = false;
 
-// ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const previewImage = document.getElementById('previewImage');
@@ -29,7 +28,6 @@ const cellCount = document.getElementById('cellCount');
 function setStatus(msg, type = 'info') {
     statusEl.textContent = msg;
     statusEl.className = `status status-${type}`;
-    console.log(`[${type}] ${msg}`);
 }
 
 function showProgress(show, value = 0) {
@@ -73,32 +71,28 @@ function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT LOCAL (CON TODAS LAS RUTAS)
+//  INICIALIZAR TESSERACT
 // ============================================================
 
 async function initTesseract() {
     try {
         if (typeof Tesseract === 'undefined') {
-            throw new Error('Tesseract no está disponible');
+            throw new Error('Tesseract no está disponible. Conéctate a internet.');
         }
 
         statusLoading.style.display = 'block';
-        statusLoading.textContent = '⏳ Cargando OCR local...';
-        setStatus('⏳ Cargando OCR local...', 'info');
+        statusLoading.textContent = '⏳ Descargando OCR (requiere internet)...';
+        setStatus('⏳ Descargando OCR...', 'info');
         showProgress(true, 5);
 
-        // CREAR WORKER CON RUTAS LOCALES EXPLÍCITAS
         worker = await Tesseract.createWorker('spa', 1, {
-            workerPath: 'libs/tesseract/worker/worker.min.js',
-            corePath: 'libs/tesseract/core/tesseract-core-simd.wasm.js',
-            langPath: 'libs/tesseract/lang/',
             logger: m => {
                 if (m.status === 'loading tesseract core') {
-                    showProgress(true, 25);
+                    showProgress(true, 20);
                     statusLoading.textContent = '📦 Cargando motor OCR...';
                 } else if (m.status === 'loading language traineddata') {
                     showProgress(true, 50);
-                    statusLoading.textContent = '📚 Cargando idioma español...';
+                    statusLoading.textContent = '📚 Descargando idioma español...';
                 } else if (m.status === 'initializing api') {
                     showProgress(true, 75);
                     statusLoading.textContent = '🚀 Inicializando...';
@@ -164,14 +158,13 @@ async function processImage() {
         setStatus('📊 Extrayendo tabla...', 'info');
 
         showOcrResult(text);
-        console.log('📄 TEXTO OCR REAL:', text);
 
         const parsed = parseTable(text);
         
         if (parsed && parsed.length > 1) {
             tableData = parsed;
             renderTable(tableData);
-            setStatus(`✅ Tabla extraída REAL (${tableData.length - 1} filas)`, 'success');
+            setStatus(`✅ Tabla extraída (${tableData.length - 1} filas)`, 'success');
             downloadBtn.disabled = false;
             copyBtn.disabled = false;
             updateCellCount();
@@ -429,14 +422,14 @@ addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
 // ============================================================
-//  INICIO
+//  INICIO - SIN DATOS DE EJEMPLO
 // ============================================================
 
 setStatus('📸 Sube una captura de pantalla', 'info');
 
-// Inicializar Tesseract
 setTimeout(async () => {
     await initTesseract();
 }, 1000);
 
-console.log('📊 Lector de Tablas - Tesseract LOCAL (50MB APK)');
+console.log('📊 Lector de Tablas - SIN SIMULACIÓN');
+console.log('📸 Solo OCR real');
