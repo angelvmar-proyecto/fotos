@@ -1,52 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>📊 Lector de Tablas</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
-            background: #667eea;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 15px;
         }
         .container {
             max-width: 800px;
-            margin: auto;
+            margin: 0 auto;
             background: white;
             border-radius: 20px;
             padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
-        h1 { text-align: center; color: #2d3748; }
+        h1 { text-align: center; color: #2d3748; font-size: 1.8rem; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #718096; font-size: 0.9rem; margin-bottom: 20px; }
         .upload-area {
             border: 3px dashed #cbd5e0;
             border-radius: 16px;
-            padding: 40px;
+            padding: 40px 20px;
             text-align: center;
             background: #f7fafc;
             cursor: pointer;
-            margin: 20px 0;
+            transition: all 0.3s;
         }
-        .upload-area:hover { background: #edf2f7; }
+        .upload-area:active { transform: scale(0.98); }
+        .upload-area .icon { font-size: 3rem; display: block; margin-bottom: 10px; }
         #fileInput { display: none; }
         .controls {
             display: flex;
             gap: 10px;
             margin: 15px 0;
+            flex-wrap: wrap;
         }
         .controls button {
             flex: 1;
             padding: 12px;
             border: none;
             border-radius: 10px;
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.9rem;
             cursor: pointer;
+            min-width: 80px;
         }
+        .controls button:disabled { opacity: 0.5; }
         .btn-primary { background: #667eea; color: white; }
         .btn-success { background: #48bb78; color: white; }
         .btn-info { background: #4299e1; color: white; }
-        .btn-danger { background: #fc8181; color: white; }
         #previewImage {
             max-width: 100%;
             max-height: 300px;
@@ -57,33 +64,38 @@
         .table-container {
             overflow-x: auto;
             margin: 15px 0;
-            border: 1px solid #e2e8f0;
             border-radius: 10px;
+            border: 1px solid #e2e8f0;
         }
         #resultTable {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         #resultTable th {
             background: #667eea;
             color: white;
             padding: 10px;
             text-align: left;
+            position: sticky;
+            top: 0;
         }
         #resultTable td {
             padding: 8px 10px;
             border-bottom: 1px solid #e2e8f0;
         }
+        #resultTable td:active { background: #ebf4ff; }
         .status {
             padding: 10px;
             border-radius: 10px;
             margin: 10px 0;
             text-align: center;
+            font-size: 0.9rem;
         }
-        .status-info { background: #bee3f8; color: #2a4365; }
         .status-success { background: #c6f6d5; color: #22543d; }
         .status-error { background: #fed7d7; color: #742a2a; }
+        .status-info { background: #bee3f8; color: #2a4365; }
+        .status-warning { background: #feebc8; color: #744210; }
         .toolbar {
             display: flex;
             gap: 8px;
@@ -94,8 +106,9 @@
             padding: 8px 15px;
             border: none;
             border-radius: 8px;
-            cursor: pointer;
             font-weight: 500;
+            font-size: 0.8rem;
+            cursor: pointer;
         }
         .btn-demo { background: #9f7aea; color: white; }
         .btn-row { background: #68d391; color: white; }
@@ -108,22 +121,42 @@
             border-radius: 20px;
             font-size: 0.75rem;
         }
-        .hidden { display: none; }
+        .progress-bar {
+            height: 20px;
+            background: #edf2f7;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+            display: none;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        @media (max-width: 480px) {
+            .container { padding: 15px; }
+            h1 { font-size: 1.4rem; }
+            .controls button { font-size: 0.8rem; padding: 10px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📊 Lector de Tablas</h1>
-        <p style="text-align:center; color:#718096;">Extrae tablas de imágenes</p>
+        <p class="subtitle">Extrae tablas de imágenes de WhatsApp</p>
         
         <div class="upload-area" id="dropZone">
-            <span style="font-size:3rem;">🖼️</span>
+            <span class="icon">🖼️</span>
             <h3>Toca para subir imagen</h3>
-            <p style="color:#a0aec0;">JPG, PNG, WEBP</p>
+            <p style="color:#a0aec0; font-size:0.85rem;">JPG, PNG, WEBP</p>
             <input type="file" id="fileInput" accept="image/*">
         </div>
         
-        <img id="previewImage" alt="Vista previa">
+        <div id="previewContainer">
+            <img id="previewImage" alt="Vista previa">
+        </div>
         
         <div class="controls">
             <button id="processBtn" class="btn-primary" disabled>🔍 Procesar</button>
@@ -131,8 +164,12 @@
             <button id="copyBtn" class="btn-info" disabled>📋 Copiar</button>
         </div>
         
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
         <div id="status" class="status status-info">
-            💡 Sube una imagen o usa "Ejemplo"
+            💡 Sube una imagen para extraer la tabla
         </div>
         
         <div class="toolbar">
@@ -145,12 +182,18 @@
         
         <div class="table-container">
             <table id="resultTable">
-                <thead><tr><th>Carga una imagen o usa "Ejemplo"</th></tr></thead>
-                <tbody><tr><td>📝 La tabla aparecerá aquí</td></tr></tbody>
+                <thead>
+                    <tr><th>📝 Toca dos veces para editar</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Carga una imagen o usa "Ejemplo"</td></tr>
+                </tbody>
             </table>
         </div>
     </div>
     
+    <!-- Tesseract.js para OCR real -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
