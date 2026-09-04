@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>📊 Excel a Tabla - WhatsApp</title>
+    <title>📊 Lector de Tablas</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -20,15 +20,6 @@
             padding: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
-        .whatsapp-badge {
-            background: #25D366;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-            display: inline-block;
-            margin-left: 10px;
-        }
         h1 { text-align: center; color: #2d3748; font-size: 1.6rem; }
         .subtitle { text-align: center; color: #718096; font-size: 0.85rem; margin-bottom: 20px; }
         .upload-area {
@@ -40,7 +31,7 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        .upload-area:active { transform: scale(0.98); background: #dcfce7; }
+        .upload-area:active { transform: scale(0.98); }
         .upload-area .icon { font-size: 3rem; display: block; margin-bottom: 10px; }
         #fileInput { display: none; }
         .controls {
@@ -97,8 +88,6 @@
             padding: 8px 10px;
             border-bottom: 1px solid #e2e8f0;
         }
-        #resultTable tr:nth-child(even) { background: #f7fafc; }
-        #resultTable tr:hover { background: #ebf4ff; }
         .status {
             padding: 10px;
             border-radius: 10px;
@@ -160,59 +149,25 @@
             font-size: 0.7rem;
             display: none;
             white-space: pre-wrap;
-            border: 1px solid #00ff41;
-            font-family: 'Courier New', monospace;
-        }
-        .tip {
-            background: #fef3c7;
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
-            font-size: 0.8rem;
-            border-left: 4px solid #f59e0b;
-        }
-        .tip strong { color: #92400e; }
-        .debug-info {
-            background: #1e293b;
-            color: #94a3b8;
-            padding: 10px;
-            border-radius: 8px;
-            margin: 10px 0;
-            font-size: 0.7rem;
             font-family: monospace;
-            display: none;
-            max-height: 100px;
-            overflow-y: auto;
-        }
-        @media (max-width: 480px) {
-            .container { padding: 15px; }
-            h1 { font-size: 1.2rem; }
-            .controls button { font-size: 0.7rem; padding: 8px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 Lector de Tablas <span class="whatsapp-badge">📱 WhatsApp</span></h1>
-        <p class="subtitle">Convierte capturas de pantalla de Excel en tablas editables</p>
-        
-        <div class="tip">
-            💡 <strong>Consejo:</strong> Captura la tabla de Excel/WhatsApp con buena iluminación y texto claro.
-        </div>
+        <h1>📊 Lector de Tablas</h1>
+        <p class="subtitle">Convierte capturas de Excel en tablas</p>
         
         <div class="upload-area" id="dropZone">
             <span class="icon">📸</span>
-            <h3>Toca para subir captura de WhatsApp</h3>
-            <p style="color:#a0aec0; font-size:0.8rem;">JPG, PNG, WEBP (Capturas de pantalla)</p>
+            <h3>Toca para subir captura</h3>
             <input type="file" id="fileInput" accept="image/*">
         </div>
         
-        <div id="previewContainer">
-            <img id="previewImage" alt="Vista previa">
-        </div>
+        <img id="previewImage" alt="Vista previa">
         
         <div class="controls">
-            <button id="processBtn" class="btn-primary" disabled>🔍 Extraer Tabla</button>
+            <button id="processBtn" class="btn-primary" disabled>🔍 Extraer</button>
             <button id="downloadBtn" class="btn-success" disabled>📥 CSV</button>
             <button id="copyBtn" class="btn-info" disabled>📋 Copiar</button>
         </div>
@@ -221,12 +176,8 @@
             <div class="progress-fill" id="progressFill"></div>
         </div>
         
-        <div id="status" class="status status-info">
-            📸 Sube una captura de pantalla de WhatsApp/Excel
-        </div>
-        
+        <div id="status" class="status status-info">📸 Sube una captura de pantalla</div>
         <div class="ocr-result" id="ocrResult"></div>
-        <div class="debug-info" id="debugInfo"></div>
         
         <div class="toolbar">
             <button class="btn-demo" id="demoBtn">📊 Ejemplo</button>
@@ -238,26 +189,14 @@
         
         <div class="table-container">
             <table id="resultTable">
-                <thead>
-                    <tr><th>📝 Toca dos veces para editar</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td>Sube una captura de WhatsApp o usa "Ejemplo"</td></tr>
-                </tbody>
+                <thead><tr><th>📝 Toca dos veces para editar</th></tr></thead>
+                <tbody><tr><td>Sube una captura o usa "Ejemplo"</td></tr></tbody>
             </table>
         </div>
     </div>
     
-    <!-- Tesseract.js desde CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script>
-        // Verificar que Tesseract se cargó
-        console.log('Tesseract disponible:', typeof Tesseract !== 'undefined');
-        if (typeof Tesseract === 'undefined') {
-            document.getElementById('status').textContent = '⚠️ Error: Tesseract no se cargó. Revisa tu conexión.';
-            document.getElementById('status').className = 'status status-error';
-        }
-    </script>
+    <!-- Tesseract LOCAL -->
+    <script src="libs/tesseract/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

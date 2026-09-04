@@ -1,12 +1,11 @@
 // ============================================================
-//  EXCEL A TABLA - OPTIMIZADO PARA WHATSAPP
+//  LECTOR DE TABLAS CON TESSERACT LOCAL
 // ============================================================
 
 let currentImageFile = null;
 let tableData = [];
 let worker = null;
 let isProcessing = false;
-let tesseractReady = false;
 
 // ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
@@ -20,16 +19,11 @@ const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const resultTable = document.getElementById('resultTable');
 const ocrResult = document.getElementById('ocrResult');
-const debugInfo = document.getElementById('debugInfo');
 const demoBtn = document.getElementById('demoBtn');
 const addRowBtn = document.getElementById('addRowBtn');
 const addColBtn = document.getElementById('addColBtn');
 const clearBtn = document.getElementById('clearBtn');
 const cellCount = document.getElementById('cellCount');
-
-// ============================================================
-//  FUNCIONES UI
-// ============================================================
 
 function setStatus(msg, type = 'info') {
     statusEl.textContent = msg;
@@ -56,19 +50,13 @@ function showOcrResult(text) {
     }
 }
 
-function addDebug(msg) {
-    debugInfo.style.display = 'block';
-    debugInfo.textContent += msg + '\n';
-    console.log('[DEBUG]', msg);
-}
-
 // ============================================================
 //  MANEJO DE IMÁGENES
 // ============================================================
 
 function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) {
-        setStatus('⚠️ Sube una imagen válida (captura de pantalla)', 'error');
+        setStatus('⚠️ Sube una imagen válida', 'error');
         return;
     }
 
@@ -78,96 +66,76 @@ function handleFile(file) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'block';
         processBtn.disabled = false;
-        setStatus('📸 Captura cargada. Toca "Extraer Tabla".', 'info');
-        addDebug('✅ Imagen cargada: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)');
-    };
-    reader.onerror = (e) => {
-        addDebug('❌ Error al leer imagen: ' + e);
+        setStatus('📸 Imagen cargada. Toca "Extraer".', 'info');
     };
     reader.readAsDataURL(file);
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT
+//  INICIALIZAR TESSERACT LOCAL
 // ============================================================
 
 async function initTesseract() {
     try {
-        // Verificar que Tesseract existe
         if (typeof Tesseract === 'undefined') {
-            throw new Error('Tesseract no está disponible. Revisa la conexión a internet.');
+            throw new Error('Tesseract no está disponible');
         }
 
-        setStatus('⏳ Cargando OCR para tablas...', 'info');
-        showProgress(true, 5);
-        addDebug('🔄 Inicializando Tesseract...');
+        setStatus('⏳ Cargando OCR local...', 'info');
+        showProgress(true, 10);
 
         worker = await Tesseract.createWorker('spa', 1, {
+            workerPath: 'libs/tesseract/worker/worker.min.js',
+            corePath: 'libs/tesseract/core/tesseract-core-simd.wasm.js',
+            langPath: 'libs/tesseract/lang/',
             logger: m => {
                 if (m.status === 'loading tesseract core') {
-                    showProgress(true, 20);
+                    showProgress(true, 30);
                     setStatus('📦 Cargando motor OCR...', 'info');
-                    addDebug('📦 Cargando core...');
                 } else if (m.status === 'loading language traineddata') {
-                    showProgress(true, 40);
-                    setStatus('📚 Descargando idioma español... (requiere internet)', 'info');
-                    addDebug('📚 Descargando modelo español...');
+                    showProgress(true, 60);
+                    setStatus('📚 Cargando idioma español...', 'info');
                 } else if (m.status === 'initializing api') {
-                    showProgress(true, 70);
-                    setStatus('🚀 Inicializando OCR...', 'info');
-                    addDebug('🚀 Inicializando API...');
+                    showProgress(true, 85);
+                    setStatus('🚀 Preparando...', 'info');
                 } else if (m.status === 'recognizing text') {
-                    const pct = Math.round(70 + (m.progress * 30));
+                    const pct = Math.round(85 + (m.progress * 15));
                     showProgress(true, pct);
-                    setStatus(`🔍 Leyendo tabla... ${pct}%`, 'info');
+                    setStatus(`🔍 Reconociendo... ${pct}%`, 'info');
                 }
             }
         });
 
-        showProgress(true, 85);
-        setStatus('⚙️ Configurando parámetros...', 'info');
-
-        // Configuración optimizada para tablas
         await worker.setParameters({
             tessedit_pageseg_mode: 6,
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;%$€£@#+-/() ',
         });
 
         showProgress(true, 100);
-        tesseractReady = true;
-        setStatus('✅ OCR listo. Sube una captura.', 'success');
-        addDebug('✅ Tesseract inicializado correctamente');
+        setStatus('✅ OCR listo. Sube una imagen.', 'success');
         setTimeout(() => showProgress(false), 1000);
         return true;
     } catch (error) {
-        console.error('Error Tesseract:', error);
+        console.error('Error:', error);
         setStatus(`❌ Error: ${error.message}`, 'error');
-        addDebug('❌ Error Tesseract: ' + error.message);
         showProgress(false);
-        tesseractReady = false;
         return false;
     }
 }
 
 // ============================================================
-//  PROCESAR IMAGEN CON TESSERACT REAL
+//  PROCESAR IMAGEN
 // ============================================================
 
 async function processImage() {
-    // Verificar que hay imagen
     if (!currentImageFile) {
-        setStatus('⚠️ Primero sube una captura de pantalla', 'error');
+        setStatus('⚠️ Primero sube una imagen', 'error');
         return;
     }
 
-    // Verificar que Tesseract está listo
-    if (!tesseractReady) {
-        setStatus('⏳ Inicializando OCR... espera un momento', 'warning');
-        const ready = await initTesseract();
-        if (!ready) {
-            setStatus('❌ No se pudo inicializar OCR. Usa "Ejemplo".', 'error');
-            return;
-        }
+    if (!worker) {
+        setStatus('⏳ Cargando OCR...', 'warning');
+        await initTesseract();
+        if (!worker) return;
     }
 
     if (isProcessing) return;
@@ -175,62 +143,39 @@ async function processImage() {
     processBtn.disabled = true;
 
     try {
-        addDebug('🔄 Iniciando procesamiento...');
-        showProgress(true, 5);
-        setStatus('🔍 Analizando captura de pantalla...', 'info');
+        showProgress(true, 10);
+        setStatus('🔍 Procesando imagen...', 'info');
 
-        // Convertir imagen a base64
         const imageData = await fileToBase64(currentImageFile);
-        addDebug('📸 Imagen convertida a base64');
-
-        showProgress(true, 30);
-        setStatus('🔍 Reconociendo texto con OCR...', 'info');
-
-        // Ejecutar OCR
         const { data: { text } } = await worker.recognize(imageData);
 
-        showProgress(true, 80);
+        showProgress(true, 90);
         setStatus('📊 Extrayendo tabla...', 'info');
 
-        // Mostrar texto crudo
         showOcrResult(text);
-        addDebug('📄 Texto OCR obtenido (' + text.length + ' caracteres)');
-        addDebug('📄 Primeras líneas:\n' + text.substring(0, 200));
 
-        // Intentar parsear como tabla
-        const parsed = parseExcelTable(text);
+        const parsed = parseTable(text);
         
         if (parsed && parsed.length > 1) {
             tableData = parsed;
             renderTable(tableData);
-            const rows = tableData.length - 1;
-            const cols = tableData[0]?.length || 0;
-            setStatus(`✅ Tabla extraída: ${rows} filas × ${cols} columnas`, 'success');
-            addDebug(`✅ Tabla extraída: ${rows} filas, ${cols} columnas`);
+            setStatus(`✅ Tabla extraída (${tableData.length - 1} filas)`, 'success');
             downloadBtn.disabled = false;
             copyBtn.disabled = false;
             updateCellCount();
         } else {
-            // Si no se detecta tabla, mostrar el texto extraído
-            setStatus('⚠️ No se detectó una tabla. Mostrando texto extraído.', 'warning');
-            addDebug('⚠️ No se detectó estructura de tabla');
-            
+            setStatus('⚠️ No se detectó una tabla', 'warning');
             const lines = text.split('\n').filter(l => l.trim());
             if (lines.length > 0) {
                 tableData = [['Texto extraído'], ...lines.map(l => [l])];
-                renderTable(tableData);
-            } else {
-                tableData = [['Sin datos']];
                 renderTable(tableData);
             }
         }
 
         showProgress(true, 100);
-        addDebug('✅ Procesamiento completado');
     } catch (error) {
         console.error('Error:', error);
         setStatus(`❌ Error: ${error.message}`, 'error');
-        addDebug('❌ Error en procesamiento: ' + error.message);
     } finally {
         isProcessing = false;
         processBtn.disabled = false;
@@ -239,89 +184,39 @@ async function processImage() {
 }
 
 // ============================================================
-//  PARSER OPTIMIZADO PARA TABLAS DE EXCEL
+//  PARSER DE TABLA
 // ============================================================
 
-function parseExcelTable(text) {
-    addDebug('🔍 Parseando texto...');
-    
-    // Limpiar y dividir en líneas
+function parseTable(text) {
     const lines = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0 && !line.match(/^[-\s]+$/));
 
-    addDebug(`📄 ${lines.length} líneas no vacías`);
-
-    if (lines.length < 2) {
-        addDebug('⚠️ Menos de 2 líneas, no es una tabla');
-        return null;
-    }
-
-    // Detectar separadores
-    const separators = ['\t', '|', ',', ';'];
-    let bestSep = null;
-    let bestCount = 0;
-
-    for (const sep of separators) {
-        const count = lines.reduce((sum, line) => sum + (line.includes(sep) ? 1 : 0), 0);
-        if (count > bestCount) {
-            bestCount = count;
-            bestSep = sep;
-        }
-    }
-
-    addDebug(`🔍 Mejor separador: ${bestSep || 'espacios'} (${bestCount} ocurrencias)`);
-
-    // Si no hay separadores claros, usar espacios
-    if (bestCount < 2) {
-        bestSep = 'spaces';
-    }
+    if (lines.length < 2) return null;
 
     const table = lines.map(line => {
-        let cells;
-        if (bestSep === '\t') {
-            cells = line.split('\t').map(c => c.trim());
-        } else if (bestSep === '|') {
-            cells = line.split('|').map(c => c.trim()).filter(c => c);
-        } else if (bestSep === ',') {
-            cells = line.split(',').map(c => c.trim());
-        } else if (bestSep === ';') {
-            cells = line.split(';').map(c => c.trim());
-        } else {
-            // Espacios: usar 2+ espacios como separador
-            cells = line.split(/\s{2,}/).map(c => c.trim());
-            if (cells.length < 2) {
-                cells = line.split(/\s+/).map(c => c.trim());
-            }
-        }
+        let cells = line.split(/\s{2,}/).map(c => c.trim());
+        if (cells.length < 2) cells = line.split(/\s+/).map(c => c.trim());
         return cells.filter(c => c.length > 0);
     });
 
-    // Filtrar filas vacías
     const filtered = table.filter(row => row.length > 0);
-    addDebug(`📊 ${filtered.length} filas después de filtrar`);
-    
     if (filtered.length > 0) {
         const maxCols = Math.max(...filtered.map(row => row.length));
-        addDebug(`📊 Máximo de columnas: ${maxCols}`);
-        
         return filtered.map(row => {
             while (row.length < maxCols) row.push('');
             return row;
         });
     }
-    
     return null;
 }
 
 // ============================================================
-//  RENDERIZAR TABLA CON EDITOR
+//  RENDERIZAR TABLA
 // ============================================================
 
 function renderTable(data) {
-    if (!data || data.length === 0) {
-        data = [['Sin datos']];
-    }
+    if (!data || data.length === 0) data = [['Sin datos']];
 
     const maxCols = Math.max(...data.map(row => row.length));
     data = data.map(row => {
@@ -372,7 +267,6 @@ function enableEditing() {
             input.style.border = '2px solid #25D366';
             input.style.borderRadius = '4px';
             input.style.padding = '4px';
-            input.style.fontSize = '0.85rem';
 
             cell.textContent = '';
             cell.appendChild(input);
@@ -386,7 +280,6 @@ function enableEditing() {
                     tableData[row][col] = val;
                 }
                 updateCellCount();
-                setStatus(`✅ Celda actualizada`, 'success');
             };
 
             input.addEventListener('blur', save);
@@ -399,48 +292,34 @@ function enableEditing() {
 }
 
 // ============================================================
-//  DATOS DE EJEMPLO
+//  DEMO Y ACCIONES
 // ============================================================
 
 function loadDemo() {
     tableData = [
-        ['Producto', 'Cantidad', 'Precio Unitario', 'Total'],
+        ['Producto', 'Cantidad', 'Precio', 'Total'],
         ['Manzanas', '10', '$2.50', '$25.00'],
         ['Peras', '5', '$3.00', '$15.00'],
         ['Naranjas', '8', '$1.80', '$14.40'],
-        ['Plátanos', '12', '$0.90', '$10.80'],
-        ['Kiwi', '6', '$2.20', '$13.20'],
-        ['Fresas', '15', '$1.50', '$22.50'],
-        ['Total', '', '', '$101.90']
+        ['Plátanos', '12', '$0.90', '$10.80']
     ];
     renderTable(tableData);
     downloadBtn.disabled = false;
     copyBtn.disabled = false;
-    setStatus('📊 Ejemplo de tabla Excel cargado', 'success');
-    addDebug('📊 Datos de ejemplo cargados');
+    setStatus('📊 Datos de ejemplo cargados', 'success');
 }
 
-// ============================================================
-//  ACCIONES DE TABLA
-// ============================================================
-
 function addRow() {
-    if (!tableData || tableData.length === 0) {
-        tableData = [['Nueva fila']];
-    }
+    if (!tableData || tableData.length === 0) tableData = [['Nueva fila']];
     const cols = tableData[0]?.length || 1;
     tableData.push(new Array(cols).fill(''));
     renderTable(tableData);
-    setStatus('➕ Fila agregada', 'info');
 }
 
 function addColumn() {
-    if (!tableData || tableData.length === 0) {
-        tableData = [['Nueva columna']];
-    }
+    if (!tableData || tableData.length === 0) tableData = [['Nueva columna']];
     tableData.forEach(row => row.push(''));
     renderTable(tableData);
-    setStatus('➕ Columna agregada', 'info');
 }
 
 function clearTable() {
@@ -449,17 +328,16 @@ function clearTable() {
         renderTable(tableData);
         downloadBtn.disabled = true;
         copyBtn.disabled = true;
-        setStatus('🗑️ Tabla limpiada', 'info');
     }
 }
 
 // ============================================================
-//  EXPORTAR CSV
+//  EXPORTAR
 // ============================================================
 
 function exportCSV() {
     if (!tableData || tableData.length === 0) {
-        alert('No hay datos para exportar');
+        alert('No hay datos');
         return;
     }
 
@@ -472,18 +350,16 @@ function exportCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `tabla_${new Date().toISOString().slice(0,10)}.csv`;
     link.click();
-    setStatus('📥 CSV descargado (compatible con Excel)', 'success');
 }
 
 function copyTable() {
     if (!tableData || tableData.length === 0) {
-        alert('No hay datos para copiar');
+        alert('No hay datos');
         return;
     }
 
     const text = tableData.map(row => row.join('\t')).join('\n');
     navigator.clipboard.writeText(text)
-        .then(() => setStatus('📋 Tabla copiada (puedes pegarla en Excel)', 'success'))
         .catch(() => {
             const ta = document.createElement('textarea');
             ta.value = text;
@@ -491,8 +367,8 @@ function copyTable() {
             ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
-            setStatus('📋 Tabla copiada', 'success');
         });
+    setStatus('📋 Tabla copiada', 'success');
 }
 
 // ============================================================
@@ -540,19 +416,12 @@ clearBtn.addEventListener('click', clearTable);
 //  INICIO
 // ============================================================
 
-setStatus('📸 Sube una captura de pantalla de WhatsApp/Excel', 'info');
-addDebug('🚀 App iniciada');
-
-setTimeout(() => {
-    loadDemo();
-    addDebug('📊 Datos de ejemplo cargados');
-}, 500);
+setStatus('📸 Sube una captura de pantalla', 'info');
+setTimeout(loadDemo, 500);
 
 // Inicializar Tesseract
 setTimeout(async () => {
-    addDebug('🔄 Iniciando carga de Tesseract...');
     await initTesseract();
-}, 2000);
+}, 1000);
 
-console.log('📊 Lector de Tablas - Optimizado para Excel/WhatsApp');
-console.log('📸 Sube una captura de pantalla y extrae la tabla');
+console.log('📊 Lector de Tablas - Con Tesseract local');
