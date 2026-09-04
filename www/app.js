@@ -1,9 +1,10 @@
 // ============================================================
-//  LECTOR DE TABLAS - App Principal
+//  LECTOR DE TABLAS CON TESSERACT LOCAL
 // ============================================================
 
 let currentImageFile = null;
 let tableData = [];
+let worker = null;
 let isProcessing = false;
 
 // ===== DOM REFERENCIAS =====
@@ -14,22 +15,44 @@ const processBtn = document.getElementById('processBtn');
 const downloadBtn = document.getElementById('downloadBtn');
 const copyBtn = document.getElementById('copyBtn');
 const statusEl = document.getElementById('status');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
 const resultTable = document.getElementById('resultTable');
+const ocrResult = document.getElementById('ocrResult');
 const demoBtn = document.getElementById('demoBtn');
 const addRowBtn = document.getElementById('addRowBtn');
 const addColBtn = document.getElementById('addColBtn');
 const clearBtn = document.getElementById('clearBtn');
 const cellCount = document.getElementById('cellCount');
 
-// ============================================================
-//  FUNCIONES PRINCIPALES
-// ============================================================
-
 function setStatus(msg, type = 'info') {
     statusEl.textContent = msg;
     statusEl.className = `status status-${type}`;
     console.log(`[${type}] ${msg}`);
 }
+
+function showProgress(show, value = 0) {
+    if (show) {
+        progressBar.style.display = 'block';
+        progressFill.style.width = Math.min(100, Math.max(0, value)) + '%';
+    } else {
+        progressBar.style.display = 'none';
+        progressFill.style.width = '0%';
+    }
+}
+
+function showOcrResult(text) {
+    if (text && text.length > 0) {
+        ocrResult.textContent = text;
+        ocrResult.style.display = 'block';
+    } else {
+        ocrResult.style.display = 'none';
+    }
+}
+
+// ============================================================
+//  MANEJO DE IMÁGENES
+// ============================================================
 
 function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) {
@@ -43,47 +66,158 @@ function handleFile(file) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'block';
         processBtn.disabled = false;
-        setStatus('📸 Imagen cargada. Toca "Procesar"', 'info');
+        setStatus('📸 Imagen cargada. Toca "Extraer".', 'info');
     };
     reader.readAsDataURL(file);
 }
 
-function processImage() {
+// ============================================================
+//  INICIALIZAR TESSERACT LOCAL
+// ============================================================
+
+async function initTesseract() {
+    try {
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract no está disponible');
+        }
+
+        setStatus('⏳ Cargando OCR local...', 'info');
+        showProgress(true, 10);
+
+        worker = await Tesseract.createWorker('spa', 1, {
+            workerPath: 'libs/tesseract/worker/worker.min.js',
+            corePath: 'libs/tesseract/core/tesseract-core-simd.wasm.js',
+            langPath: 'libs/tesseract/lang/',
+            logger: m => {
+                if (m.status === 'loading tesseract core') {
+                    showProgress(true, 30);
+                    setStatus('📦 Cargando motor OCR...', 'info');
+                } else if (m.status === 'loading language traineddata') {
+                    showProgress(true, 60);
+                    setStatus('📚 Cargando idioma español...', 'info');
+                } else if (m.status === 'initializing api') {
+                    showProgress(true, 85);
+                    setStatus('🚀 Preparando...', 'info');
+                } else if (m.status === 'recognizing text') {
+                    const pct = Math.round(85 + (m.progress * 15));
+                    showProgress(true, pct);
+                    setStatus(`🔍 Reconociendo... ${pct}%`, 'info');
+                }
+            }
+        });
+
+        await worker.setParameters({
+            tessedit_pageseg_mode: 6,
+        });
+
+        showProgress(true, 100);
+        setStatus('✅ OCR listo. Sube una imagen.', 'success');
+        setTimeout(() => showProgress(false), 1000);
+        return true;
+    } catch (error) {
+        console.error('Error:', error);
+        setStatus(`❌ Error: ${error.message}`, 'error');
+        showProgress(false);
+        return false;
+    }
+}
+
+// ============================================================
+//  PROCESAR IMAGEN
+// ============================================================
+
+async function processImage() {
     if (!currentImageFile) {
         setStatus('⚠️ Primero sube una imagen', 'error');
         return;
+    }
+
+    if (!worker) {
+        setStatus('⏳ Cargando OCR...', 'warning');
+        await initTesseract();
+        if (!worker) return;
     }
 
     if (isProcessing) return;
     isProcessing = true;
     processBtn.disabled = true;
 
-    setStatus('🔍 Procesando imagen... (simulado)', 'info');
-    
-    // Simular procesamiento con datos de ejemplo
-    setTimeout(() => {
-        tableData = [
-            ['Producto', 'Cantidad', 'Precio', 'Total'],
-            ['Manzanas', '10', '$2.50', '$25.00'],
-            ['Peras', '5', '$3.00', '$15.00'],
-            ['Naranjas', '8', '$1.80', '$14.40'],
-            ['Plátanos', '12', '$0.90', '$10.80']
-        ];
-        renderTable(tableData);
-        downloadBtn.disabled = false;
-        copyBtn.disabled = false;
-        setStatus(`✅ Tabla extraída (${tableData.length - 1} filas)`, 'success');
+    try {
+        showProgress(true, 10);
+        setStatus('🔍 Procesando imagen...', 'info');
+
+        const imageData = await fileToBase64(currentImageFile);
+        const { data: { text } } = await worker.recognize(imageData);
+
+        showProgress(true, 90);
+        setStatus('📊 Extrayendo tabla...', 'info');
+
+        showOcrResult(text);
+
+        const parsed = parseTable(text);
+        
+        if (parsed && parsed.length > 1) {
+            tableData = parsed;
+            renderTable(tableData);
+            setStatus(`✅ Tabla extraída (${tableData.length - 1} filas)`, 'success');
+            downloadBtn.disabled = false;
+            copyBtn.disabled = false;
+            updateCellCount();
+        } else {
+            setStatus('⚠️ No se detectó una tabla', 'warning');
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length > 0) {
+                tableData = [['Texto extraído'], ...lines.map(l => [l])];
+                renderTable(tableData);
+            }
+        }
+
+        showProgress(true, 100);
+    } catch (error) {
+        console.error('Error:', error);
+        setStatus(`❌ Error: ${error.message}`, 'error');
+    } finally {
         isProcessing = false;
         processBtn.disabled = false;
-    }, 1500);
+        setTimeout(() => showProgress(false), 1500);
+    }
 }
 
-function renderTable(data) {
-    if (!data || data.length === 0) {
-        data = [['Sin datos']];
-    }
+// ============================================================
+//  PARSER DE TABLA
+// ============================================================
 
-    // Asegurar mismo número de columnas
+function parseTable(text) {
+    const lines = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.match(/^[-\s]+$/));
+
+    if (lines.length < 2) return null;
+
+    const table = lines.map(line => {
+        let cells = line.split(/\s{2,}/).map(c => c.trim());
+        if (cells.length < 2) cells = line.split(/\s+/).map(c => c.trim());
+        return cells.filter(c => c.length > 0);
+    });
+
+    const filtered = table.filter(row => row.length > 0);
+    if (filtered.length > 0) {
+        const maxCols = Math.max(...filtered.map(row => row.length));
+        return filtered.map(row => {
+            while (row.length < maxCols) row.push('');
+            return row;
+        });
+    }
+    return null;
+}
+
+// ============================================================
+//  RENDERIZAR TABLA
+// ============================================================
+
+function renderTable(data) {
+    if (!data || data.length === 0) data = [['Sin datos']];
+
     const maxCols = Math.max(...data.map(row => row.length));
     data = data.map(row => {
         while (row.length < maxCols) row.push('');
@@ -102,7 +236,7 @@ function renderTable(data) {
     for (let i = 1; i < data.length; i++) {
         html += '<tr>';
         for (let j = 0; j < data[i].length; j++) {
-            html += `<td>${escapeHtml(data[i][j] || '')}</td>`;
+            html += `<td data-row="${i}" data-col="${j}">${escapeHtml(data[i][j] || '')}</td>`;
         }
         html += '</tr>';
     }
@@ -110,7 +244,56 @@ function renderTable(data) {
 
     resultTable.innerHTML = html;
     updateCellCount();
+    enableEditing();
 }
+
+// ============================================================
+//  EDITOR DE CELDAS
+// ============================================================
+
+function enableEditing() {
+    const cells = resultTable.querySelectorAll('td');
+    cells.forEach(cell => {
+        cell.addEventListener('dblclick', () => {
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            if (isNaN(row) || isNaN(col)) return;
+
+            const original = cell.textContent;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = original;
+            input.style.width = '100%';
+            input.style.border = '2px solid #25D366';
+            input.style.borderRadius = '4px';
+            input.style.padding = '4px';
+
+            cell.textContent = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+
+            const save = () => {
+                const val = input.value;
+                cell.textContent = val || ' ';
+                if (tableData[row] && tableData[row][col] !== undefined) {
+                    tableData[row][col] = val;
+                }
+                updateCellCount();
+            };
+
+            input.addEventListener('blur', save);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { cell.textContent = original; input.remove(); }
+            });
+        });
+    });
+}
+
+// ============================================================
+//  DEMO Y ACCIONES
+// ============================================================
 
 function loadDemo() {
     tableData = [
@@ -118,8 +301,7 @@ function loadDemo() {
         ['Manzanas', '10', '$2.50', '$25.00'],
         ['Peras', '5', '$3.00', '$15.00'],
         ['Naranjas', '8', '$1.80', '$14.40'],
-        ['Plátanos', '12', '$0.90', '$10.80'],
-        ['Total', '', '', '$65.20']
+        ['Plátanos', '12', '$0.90', '$10.80']
     ];
     renderTable(tableData);
     downloadBtn.disabled = false;
@@ -128,22 +310,16 @@ function loadDemo() {
 }
 
 function addRow() {
-    if (!tableData || tableData.length === 0) {
-        tableData = [['Nueva fila']];
-    }
+    if (!tableData || tableData.length === 0) tableData = [['Nueva fila']];
     const cols = tableData[0]?.length || 1;
     tableData.push(new Array(cols).fill(''));
     renderTable(tableData);
-    setStatus('➕ Fila agregada', 'info');
 }
 
 function addColumn() {
-    if (!tableData || tableData.length === 0) {
-        tableData = [['Nueva columna']];
-    }
+    if (!tableData || tableData.length === 0) tableData = [['Nueva columna']];
     tableData.forEach(row => row.push(''));
     renderTable(tableData);
-    setStatus('➕ Columna agregada', 'info');
 }
 
 function clearTable() {
@@ -152,13 +328,16 @@ function clearTable() {
         renderTable(tableData);
         downloadBtn.disabled = true;
         copyBtn.disabled = true;
-        setStatus('🗑️ Tabla limpiada', 'info');
     }
 }
 
+// ============================================================
+//  EXPORTAR
+// ============================================================
+
 function exportCSV() {
     if (!tableData || tableData.length === 0) {
-        alert('No hay datos para exportar');
+        alert('No hay datos');
         return;
     }
 
@@ -171,18 +350,16 @@ function exportCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `tabla_${new Date().toISOString().slice(0,10)}.csv`;
     link.click();
-    setStatus('📥 CSV descargado', 'success');
 }
 
 function copyTable() {
     if (!tableData || tableData.length === 0) {
-        alert('No hay datos para copiar');
+        alert('No hay datos');
         return;
     }
 
     const text = tableData.map(row => row.join('\t')).join('\n');
     navigator.clipboard.writeText(text)
-        .then(() => setStatus('📋 Tabla copiada', 'success'))
         .catch(() => {
             const ta = document.createElement('textarea');
             ta.value = text;
@@ -190,14 +367,27 @@ function copyTable() {
             ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
-            setStatus('📋 Tabla copiada', 'success');
         });
+    setStatus('📋 Tabla copiada', 'success');
 }
+
+// ============================================================
+//  UTILIDADES
+// ============================================================
 
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 function updateCellCount() {
@@ -226,6 +416,12 @@ clearBtn.addEventListener('click', clearTable);
 //  INICIO
 // ============================================================
 
-setStatus('💡 Sube una imagen o usa "Ejemplo"', 'info');
+setStatus('📸 Sube una captura de pantalla', 'info');
 setTimeout(loadDemo, 500);
-console.log('📊 Lector de Tablas iniciado');
+
+// Inicializar Tesseract
+setTimeout(async () => {
+    await initTesseract();
+}, 1000);
+
+console.log('📊 Lector de Tablas - Con Tesseract local');

@@ -1,5 +1,19 @@
 {
   "appId": "com.angelvmar.fotos",
   "appName": "Lector Tablas",
-  "webDir": "www"
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true,
+    "buildOptions": {
+      "keystorePath": "",
+      "keystoreAlias": "",
+      "keystorePassword": "",
+      "keyPassword": ""
+    }
+  }
 }
