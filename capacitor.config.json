@@ -2,12 +2,12 @@
   "appId": "com.angelvmar.fotos",
   "appName": "Lector Tablas",
   "webDir": "www",
-  "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
   },
   "android": {
     "allowMixedContent": true,
-    "webContentsDebuggingEnabled": false
+    "webContentsDebuggingEnabled": true
   }
 }
