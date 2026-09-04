@@ -1,11 +1,12 @@
 // ============================================================
-//  LECTOR DE TABLAS CON TESSERACT LOCAL
+//  LECTOR DE TABLAS - TESSERACT LOCAL (50MB APK)
 // ============================================================
 
 let currentImageFile = null;
 let tableData = [];
 let worker = null;
 let isProcessing = false;
+let tesseractReady = false;
 
 // ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
@@ -19,7 +20,7 @@ const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const resultTable = document.getElementById('resultTable');
 const ocrResult = document.getElementById('ocrResult');
-const demoBtn = document.getElementById('demoBtn');
+const statusLoading = document.getElementById('statusLoading');
 const addRowBtn = document.getElementById('addRowBtn');
 const addColBtn = document.getElementById('addColBtn');
 const clearBtn = document.getElementById('clearBtn');
@@ -72,7 +73,7 @@ function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT LOCAL
+//  INICIALIZAR TESSERACT LOCAL (CON TODAS LAS RUTAS)
 // ============================================================
 
 async function initTesseract() {
@@ -81,27 +82,30 @@ async function initTesseract() {
             throw new Error('Tesseract no está disponible');
         }
 
+        statusLoading.style.display = 'block';
+        statusLoading.textContent = '⏳ Cargando OCR local...';
         setStatus('⏳ Cargando OCR local...', 'info');
-        showProgress(true, 10);
+        showProgress(true, 5);
 
+        // CREAR WORKER CON RUTAS LOCALES EXPLÍCITAS
         worker = await Tesseract.createWorker('spa', 1, {
             workerPath: 'libs/tesseract/worker/worker.min.js',
             corePath: 'libs/tesseract/core/tesseract-core-simd.wasm.js',
             langPath: 'libs/tesseract/lang/',
             logger: m => {
                 if (m.status === 'loading tesseract core') {
-                    showProgress(true, 30);
-                    setStatus('📦 Cargando motor OCR...', 'info');
+                    showProgress(true, 25);
+                    statusLoading.textContent = '📦 Cargando motor OCR...';
                 } else if (m.status === 'loading language traineddata') {
-                    showProgress(true, 60);
-                    setStatus('📚 Cargando idioma español...', 'info');
+                    showProgress(true, 50);
+                    statusLoading.textContent = '📚 Cargando idioma español...';
                 } else if (m.status === 'initializing api') {
-                    showProgress(true, 85);
-                    setStatus('🚀 Preparando...', 'info');
+                    showProgress(true, 75);
+                    statusLoading.textContent = '🚀 Inicializando...';
                 } else if (m.status === 'recognizing text') {
-                    const pct = Math.round(85 + (m.progress * 15));
+                    const pct = Math.round(75 + (m.progress * 25));
                     showProgress(true, pct);
-                    setStatus(`🔍 Reconociendo... ${pct}%`, 'info');
+                    statusLoading.textContent = `🔍 Reconociendo... ${pct}%`;
                 }
             }
         });
@@ -111,19 +115,24 @@ async function initTesseract() {
         });
 
         showProgress(true, 100);
+        tesseractReady = true;
+        statusLoading.style.display = 'none';
         setStatus('✅ OCR listo. Sube una imagen.', 'success');
         setTimeout(() => showProgress(false), 1000);
         return true;
     } catch (error) {
         console.error('Error:', error);
+        statusLoading.style.display = 'block';
+        statusLoading.textContent = '❌ Error: ' + error.message;
         setStatus(`❌ Error: ${error.message}`, 'error');
         showProgress(false);
+        tesseractReady = false;
         return false;
     }
 }
 
 // ============================================================
-//  PROCESAR IMAGEN
+//  PROCESAR IMAGEN CON TESSERACT REAL
 // ============================================================
 
 async function processImage() {
@@ -132,10 +141,10 @@ async function processImage() {
         return;
     }
 
-    if (!worker) {
+    if (!tesseractReady) {
         setStatus('⏳ Cargando OCR...', 'warning');
-        await initTesseract();
-        if (!worker) return;
+        const ready = await initTesseract();
+        if (!ready) return;
     }
 
     if (isProcessing) return;
@@ -143,31 +152,34 @@ async function processImage() {
     processBtn.disabled = true;
 
     try {
-        showProgress(true, 10);
-        setStatus('🔍 Procesando imagen...', 'info');
+        showProgress(true, 5);
+        setStatus('🔍 Procesando imagen con OCR REAL...', 'info');
 
         const imageData = await fileToBase64(currentImageFile);
+        showProgress(true, 30);
+
         const { data: { text } } = await worker.recognize(imageData);
 
-        showProgress(true, 90);
+        showProgress(true, 85);
         setStatus('📊 Extrayendo tabla...', 'info');
 
         showOcrResult(text);
+        console.log('📄 TEXTO OCR REAL:', text);
 
         const parsed = parseTable(text);
         
         if (parsed && parsed.length > 1) {
             tableData = parsed;
             renderTable(tableData);
-            setStatus(`✅ Tabla extraída (${tableData.length - 1} filas)`, 'success');
+            setStatus(`✅ Tabla extraída REAL (${tableData.length - 1} filas)`, 'success');
             downloadBtn.disabled = false;
             copyBtn.disabled = false;
             updateCellCount();
         } else {
-            setStatus('⚠️ No se detectó una tabla', 'warning');
+            setStatus('⚠️ No se detectó una tabla.', 'warning');
             const lines = text.split('\n').filter(l => l.trim());
             if (lines.length > 0) {
-                tableData = [['Texto extraído'], ...lines.map(l => [l])];
+                tableData = [['Texto OCR'], ...lines.map(l => [l])];
                 renderTable(tableData);
             }
         }
@@ -194,9 +206,15 @@ function parseTable(text) {
 
     if (lines.length < 2) return null;
 
+    const sep = detectSeparator(lines);
+    
     const table = lines.map(line => {
-        let cells = line.split(/\s{2,}/).map(c => c.trim());
-        if (cells.length < 2) cells = line.split(/\s+/).map(c => c.trim());
+        let cells;
+        if (sep === 'tab') cells = line.split('\t');
+        else if (sep === 'pipe') cells = line.split('|').filter(c => c.trim());
+        else if (sep === 'comma') cells = line.split(',').map(c => c.trim());
+        else if (sep === 'semicolon') cells = line.split(';').map(c => c.trim());
+        else cells = line.split(/\s{2,}/).map(c => c.trim());
         return cells.filter(c => c.length > 0);
     });
 
@@ -209,6 +227,22 @@ function parseTable(text) {
         });
     }
     return null;
+}
+
+function detectSeparator(lines) {
+    const counts = { tab: 0, pipe: 0, comma: 0, semicolon: 0 };
+    lines.forEach(line => {
+        if (line.includes('\t')) counts.tab++;
+        if (line.includes('|')) counts.pipe++;
+        if (line.includes(',')) counts.comma++;
+        if (line.includes(';')) counts.semicolon++;
+    });
+    let max = 0;
+    let best = 'spaces';
+    for (const [key, val] of Object.entries(counts)) {
+        if (val > max) { max = val; best = key; }
+    }
+    return max > 0 ? best : 'spaces';
 }
 
 // ============================================================
@@ -246,10 +280,6 @@ function renderTable(data) {
     updateCellCount();
     enableEditing();
 }
-
-// ============================================================
-//  EDITOR DE CELDAS
-// ============================================================
 
 function enableEditing() {
     const cells = resultTable.querySelectorAll('td');
@@ -292,22 +322,8 @@ function enableEditing() {
 }
 
 // ============================================================
-//  DEMO Y ACCIONES
+//  ACCIONES DE TABLA
 // ============================================================
-
-function loadDemo() {
-    tableData = [
-        ['Producto', 'Cantidad', 'Precio', 'Total'],
-        ['Manzanas', '10', '$2.50', '$25.00'],
-        ['Peras', '5', '$3.00', '$15.00'],
-        ['Naranjas', '8', '$1.80', '$14.40'],
-        ['Plátanos', '12', '$0.90', '$10.80']
-    ];
-    renderTable(tableData);
-    downloadBtn.disabled = false;
-    copyBtn.disabled = false;
-    setStatus('📊 Datos de ejemplo cargados', 'success');
-}
 
 function addRow() {
     if (!tableData || tableData.length === 0) tableData = [['Nueva fila']];
@@ -350,6 +366,7 @@ function exportCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = `tabla_${new Date().toISOString().slice(0,10)}.csv`;
     link.click();
+    setStatus('📥 CSV descargado', 'success');
 }
 
 function copyTable() {
@@ -407,7 +424,6 @@ fileInput.addEventListener('change', (e) => {
 processBtn.addEventListener('click', processImage);
 downloadBtn.addEventListener('click', exportCSV);
 copyBtn.addEventListener('click', copyTable);
-demoBtn.addEventListener('click', loadDemo);
 addRowBtn.addEventListener('click', addRow);
 addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
@@ -417,11 +433,10 @@ clearBtn.addEventListener('click', clearTable);
 // ============================================================
 
 setStatus('📸 Sube una captura de pantalla', 'info');
-setTimeout(loadDemo, 500);
 
 // Inicializar Tesseract
 setTimeout(async () => {
     await initTesseract();
 }, 1000);
 
-console.log('📊 Lector de Tablas - Con Tesseract local');
+console.log('📊 Lector de Tablas - Tesseract LOCAL (50MB APK)');

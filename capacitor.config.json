@@ -8,12 +8,6 @@
   },
   "android": {
     "allowMixedContent": true,
-    "webContentsDebuggingEnabled": true,
-    "buildOptions": {
-      "keystorePath": "",
-      "keystoreAlias": "",
-      "keystorePassword": "",
-      "keyPassword": ""
-    }
+    "webContentsDebuggingEnabled": false
   }
 }
