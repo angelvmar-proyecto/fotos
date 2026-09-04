@@ -6,6 +6,7 @@ let currentImageFile = null;
 let tableData = [];
 let worker = null;
 let isProcessing = false;
+let tesseractReady = false;
 
 // ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
@@ -19,6 +20,7 @@ const progressBar = document.getElementById('progressBar');
 const progressFill = document.getElementById('progressFill');
 const resultTable = document.getElementById('resultTable');
 const ocrResult = document.getElementById('ocrResult');
+const debugInfo = document.getElementById('debugInfo');
 const demoBtn = document.getElementById('demoBtn');
 const addRowBtn = document.getElementById('addRowBtn');
 const addColBtn = document.getElementById('addColBtn');
@@ -54,6 +56,12 @@ function showOcrResult(text) {
     }
 }
 
+function addDebug(msg) {
+    debugInfo.style.display = 'block';
+    debugInfo.textContent += msg + '\n';
+    console.log('[DEBUG]', msg);
+}
+
 // ============================================================
 //  MANEJO DE IMÁGENES
 // ============================================================
@@ -71,71 +79,93 @@ function handleFile(file) {
         previewImage.style.display = 'block';
         processBtn.disabled = false;
         setStatus('📸 Captura cargada. Toca "Extraer Tabla".', 'info');
+        addDebug('✅ Imagen cargada: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)');
+    };
+    reader.onerror = (e) => {
+        addDebug('❌ Error al leer imagen: ' + e);
     };
     reader.readAsDataURL(file);
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT (OPTIMIZADO PARA TABLAS)
+//  INICIALIZAR TESSERACT
 // ============================================================
 
 async function initTesseract() {
     try {
+        // Verificar que Tesseract existe
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract no está disponible. Revisa la conexión a internet.');
+        }
+
         setStatus('⏳ Cargando OCR para tablas...', 'info');
-        showProgress(true, 10);
+        showProgress(true, 5);
+        addDebug('🔄 Inicializando Tesseract...');
 
         worker = await Tesseract.createWorker('spa', 1, {
             logger: m => {
                 if (m.status === 'loading tesseract core') {
-                    showProgress(true, 30);
+                    showProgress(true, 20);
                     setStatus('📦 Cargando motor OCR...', 'info');
+                    addDebug('📦 Cargando core...');
                 } else if (m.status === 'loading language traineddata') {
-                    showProgress(true, 60);
-                    setStatus('📚 Descargando idioma español...', 'info');
+                    showProgress(true, 40);
+                    setStatus('📚 Descargando idioma español... (requiere internet)', 'info');
+                    addDebug('📚 Descargando modelo español...');
                 } else if (m.status === 'initializing api') {
-                    showProgress(true, 85);
-                    setStatus('🚀 Preparando...', 'info');
+                    showProgress(true, 70);
+                    setStatus('🚀 Inicializando OCR...', 'info');
+                    addDebug('🚀 Inicializando API...');
                 } else if (m.status === 'recognizing text') {
-                    const pct = Math.round(85 + (m.progress * 15));
+                    const pct = Math.round(70 + (m.progress * 30));
                     showProgress(true, pct);
                     setStatus(`🔍 Leyendo tabla... ${pct}%`, 'info');
                 }
             }
         });
 
-        // Configuración OPTIMIZADA para tablas
+        showProgress(true, 85);
+        setStatus('⚙️ Configurando parámetros...', 'info');
+
+        // Configuración optimizada para tablas
         await worker.setParameters({
-            tessedit_pageseg_mode: 6, // Bloque de texto uniforme
+            tessedit_pageseg_mode: 6,
             tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;%$€£@#+-/() ',
         });
 
         showProgress(true, 100);
+        tesseractReady = true;
         setStatus('✅ OCR listo. Sube una captura.', 'success');
+        addDebug('✅ Tesseract inicializado correctamente');
         setTimeout(() => showProgress(false), 1000);
         return true;
     } catch (error) {
         console.error('Error Tesseract:', error);
-        setStatus(`⚠️ ${error.message}. Usa "Ejemplo".`, 'warning');
+        setStatus(`❌ Error: ${error.message}`, 'error');
+        addDebug('❌ Error Tesseract: ' + error.message);
         showProgress(false);
+        tesseractReady = false;
         return false;
     }
 }
 
 // ============================================================
-//  PROCESAR IMAGEN - OPTIMIZADO PARA TABLAS
+//  PROCESAR IMAGEN CON TESSERACT REAL
 // ============================================================
 
 async function processImage() {
+    // Verificar que hay imagen
     if (!currentImageFile) {
         setStatus('⚠️ Primero sube una captura de pantalla', 'error');
         return;
     }
 
-    if (!worker) {
-        setStatus('⏳ Cargando OCR...', 'warning');
+    // Verificar que Tesseract está listo
+    if (!tesseractReady) {
+        setStatus('⏳ Inicializando OCR... espera un momento', 'warning');
         const ready = await initTesseract();
         if (!ready) {
-            setStatus('❌ No se pudo cargar OCR. Usa "Ejemplo".', 'error');
+            setStatus('❌ No se pudo inicializar OCR. Usa "Ejemplo".', 'error');
             return;
         }
     }
@@ -145,20 +175,29 @@ async function processImage() {
     processBtn.disabled = true;
 
     try {
-        showProgress(true, 10);
+        addDebug('🔄 Iniciando procesamiento...');
+        showProgress(true, 5);
         setStatus('🔍 Analizando captura de pantalla...', 'info');
 
+        // Convertir imagen a base64
         const imageData = await fileToBase64(currentImageFile);
+        addDebug('📸 Imagen convertida a base64');
+
+        showProgress(true, 30);
+        setStatus('🔍 Reconociendo texto con OCR...', 'info');
+
+        // Ejecutar OCR
         const { data: { text } } = await worker.recognize(imageData);
 
-        showProgress(true, 90);
+        showProgress(true, 80);
         setStatus('📊 Extrayendo tabla...', 'info');
 
-        // Mostrar texto crudo para depuración
+        // Mostrar texto crudo
         showOcrResult(text);
-        console.log('📄 Texto OCR:', text);
+        addDebug('📄 Texto OCR obtenido (' + text.length + ' caracteres)');
+        addDebug('📄 Primeras líneas:\n' + text.substring(0, 200));
 
-        // Parser mejorado para tablas de Excel
+        // Intentar parsear como tabla
         const parsed = parseExcelTable(text);
         
         if (parsed && parsed.length > 1) {
@@ -167,23 +206,31 @@ async function processImage() {
             const rows = tableData.length - 1;
             const cols = tableData[0]?.length || 0;
             setStatus(`✅ Tabla extraída: ${rows} filas × ${cols} columnas`, 'success');
+            addDebug(`✅ Tabla extraída: ${rows} filas, ${cols} columnas`);
             downloadBtn.disabled = false;
             copyBtn.disabled = false;
             updateCellCount();
         } else {
-            setStatus('⚠️ No se detectó una tabla. ¿Es una captura de Excel?', 'warning');
-            // Mostrar texto extraído como fallback
+            // Si no se detecta tabla, mostrar el texto extraído
+            setStatus('⚠️ No se detectó una tabla. Mostrando texto extraído.', 'warning');
+            addDebug('⚠️ No se detectó estructura de tabla');
+            
             const lines = text.split('\n').filter(l => l.trim());
             if (lines.length > 0) {
                 tableData = [['Texto extraído'], ...lines.map(l => [l])];
+                renderTable(tableData);
+            } else {
+                tableData = [['Sin datos']];
                 renderTable(tableData);
             }
         }
 
         showProgress(true, 100);
+        addDebug('✅ Procesamiento completado');
     } catch (error) {
         console.error('Error:', error);
         setStatus(`❌ Error: ${error.message}`, 'error');
+        addDebug('❌ Error en procesamiento: ' + error.message);
     } finally {
         isProcessing = false;
         processBtn.disabled = false;
@@ -192,25 +239,25 @@ async function processImage() {
 }
 
 // ============================================================
-//  PARSER OPTIMIZADO PARA TABLAS DE EXCEL/WHATSAPP
+//  PARSER OPTIMIZADO PARA TABLAS DE EXCEL
 // ============================================================
 
 function parseExcelTable(text) {
+    addDebug('🔍 Parseando texto...');
+    
     // Limpiar y dividir en líneas
     const lines = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0 && !line.match(/^[-\s]+$/));
 
+    addDebug(`📄 ${lines.length} líneas no vacías`);
+
     if (lines.length < 2) {
-        // Intentar con tabuladores o espacios múltiples
-        const possible = text.split(/\s{3,}/).filter(s => s.trim());
-        if (possible.length > 3) {
-            return [['Datos'], ...possible.map(item => [item])];
-        }
+        addDebug('⚠️ Menos de 2 líneas, no es una tabla');
         return null;
     }
 
-    // Detectar separadores comunes en Excel
+    // Detectar separadores
     const separators = ['\t', '|', ',', ';'];
     let bestSep = null;
     let bestCount = 0;
@@ -222,6 +269,8 @@ function parseExcelTable(text) {
             bestSep = sep;
         }
     }
+
+    addDebug(`🔍 Mejor separador: ${bestSep || 'espacios'} (${bestCount} ocurrencias)`);
 
     // Si no hay separadores claros, usar espacios
     if (bestCount < 2) {
@@ -242,27 +291,20 @@ function parseExcelTable(text) {
             // Espacios: usar 2+ espacios como separador
             cells = line.split(/\s{2,}/).map(c => c.trim());
             if (cells.length < 2) {
-                // Fallback: dividir por espacios simples
                 cells = line.split(/\s+/).map(c => c.trim());
             }
         }
         return cells.filter(c => c.length > 0);
     });
 
-    // Filtrar filas vacías y normalizar
+    // Filtrar filas vacías
     const filtered = table.filter(row => row.length > 0);
+    addDebug(`📊 ${filtered.length} filas después de filtrar`);
     
     if (filtered.length > 0) {
         const maxCols = Math.max(...filtered.map(row => row.length));
-        // Si hay muchas filas con 1 columna, intentar transponer
-        if (maxCols === 1 && filtered.length > 5) {
-            // Podría ser una tabla vertical
-            const transposed = filtered.map(row => row[0]);
-            if (transposed.length > 3) {
-                return [['Datos'], ...transposed.map(item => [item])];
-            }
-        }
-        // Normalizar número de columnas
+        addDebug(`📊 Máximo de columnas: ${maxCols}`);
+        
         return filtered.map(row => {
             while (row.length < maxCols) row.push('');
             return row;
@@ -357,7 +399,7 @@ function enableEditing() {
 }
 
 // ============================================================
-//  DATOS DE EJEMPLO (TABLA DE EXCEL TÍPICA)
+//  DATOS DE EJEMPLO
 // ============================================================
 
 function loadDemo() {
@@ -375,6 +417,7 @@ function loadDemo() {
     downloadBtn.disabled = false;
     copyBtn.disabled = false;
     setStatus('📊 Ejemplo de tabla Excel cargado', 'success');
+    addDebug('📊 Datos de ejemplo cargados');
 }
 
 // ============================================================
@@ -411,7 +454,7 @@ function clearTable() {
 }
 
 // ============================================================
-//  EXPORTAR CSV (COMPATIBLE CON EXCEL)
+//  EXPORTAR CSV
 // ============================================================
 
 function exportCSV() {
@@ -498,12 +541,18 @@ clearBtn.addEventListener('click', clearTable);
 // ============================================================
 
 setStatus('📸 Sube una captura de pantalla de WhatsApp/Excel', 'info');
-setTimeout(loadDemo, 500);
+addDebug('🚀 App iniciada');
+
+setTimeout(() => {
+    loadDemo();
+    addDebug('📊 Datos de ejemplo cargados');
+}, 500);
 
 // Inicializar Tesseract
 setTimeout(async () => {
+    addDebug('🔄 Iniciando carga de Tesseract...');
     await initTesseract();
-}, 1000);
+}, 2000);
 
 console.log('📊 Lector de Tablas - Optimizado para Excel/WhatsApp');
 console.log('📸 Sube una captura de pantalla y extrae la tabla');

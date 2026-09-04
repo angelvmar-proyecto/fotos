@@ -150,16 +150,17 @@
             transition: width 0.3s;
         }
         .ocr-result {
-            background: #f1f5f9;
+            background: #1a1a2e;
+            color: #00ff41;
             padding: 10px;
             border-radius: 8px;
             margin: 10px 0;
-            max-height: 120px;
+            max-height: 150px;
             overflow-y: auto;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             display: none;
             white-space: pre-wrap;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #00ff41;
             font-family: 'Courier New', monospace;
         }
         .tip {
@@ -171,6 +172,18 @@
             border-left: 4px solid #f59e0b;
         }
         .tip strong { color: #92400e; }
+        .debug-info {
+            background: #1e293b;
+            color: #94a3b8;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 0.7rem;
+            font-family: monospace;
+            display: none;
+            max-height: 100px;
+            overflow-y: auto;
+        }
         @media (max-width: 480px) {
             .container { padding: 15px; }
             h1 { font-size: 1.2rem; }
@@ -213,6 +226,7 @@
         </div>
         
         <div class="ocr-result" id="ocrResult"></div>
+        <div class="debug-info" id="debugInfo"></div>
         
         <div class="toolbar">
             <button class="btn-demo" id="demoBtn">📊 Ejemplo</button>
@@ -234,8 +248,16 @@
         </div>
     </div>
     
-    <!-- Tesseract.js para OCR -->
+    <!-- Tesseract.js desde CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script>
+        // Verificar que Tesseract se cargó
+        console.log('Tesseract disponible:', typeof Tesseract !== 'undefined');
+        if (typeof Tesseract === 'undefined') {
+            document.getElementById('status').textContent = '⚠️ Error: Tesseract no se cargó. Revisa tu conexión.';
+            document.getElementById('status').className = 'status status-error';
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
