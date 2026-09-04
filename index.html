@@ -20,7 +20,7 @@
             padding: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
-        h1 { text-align: center; color: #2d3748; font-size: 1.8rem; margin-bottom: 5px; }
+        h1 { text-align: center; color: #2d3748; font-size: 1.8rem; }
         .subtitle { text-align: center; color: #718096; font-size: 0.9rem; margin-bottom: 20px; }
         .upload-area {
             border: 3px dashed #cbd5e0;
@@ -66,6 +66,8 @@
             margin: 15px 0;
             border-radius: 10px;
             border: 1px solid #e2e8f0;
+            max-height: 400px;
+            overflow-y: auto;
         }
         #resultTable {
             width: 100%;
@@ -79,12 +81,12 @@
             text-align: left;
             position: sticky;
             top: 0;
+            z-index: 10;
         }
         #resultTable td {
             padding: 8px 10px;
             border-bottom: 1px solid #e2e8f0;
         }
-        #resultTable td:active { background: #ebf4ff; }
         .status {
             padding: 10px;
             border-radius: 10px;
@@ -135,6 +137,18 @@
             width: 0%;
             transition: width 0.3s;
         }
+        .ocr-result {
+            background: #f7fafc;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: none;
+            white-space: pre-wrap;
+            border: 1px solid #e2e8f0;
+        }
         @media (max-width: 480px) {
             .container { padding: 15px; }
             h1 { font-size: 1.4rem; }
@@ -145,7 +159,7 @@
 <body>
     <div class="container">
         <h1>📊 Lector de Tablas</h1>
-        <p class="subtitle">Extrae tablas de imágenes de WhatsApp</p>
+        <p class="subtitle">Extrae tablas de imágenes con OCR</p>
         
         <div class="upload-area" id="dropZone">
             <span class="icon">🖼️</span>
@@ -172,6 +186,8 @@
             💡 Sube una imagen para extraer la tabla
         </div>
         
+        <div class="ocr-result" id="ocrResult"></div>
+        
         <div class="toolbar">
             <button class="btn-demo" id="demoBtn">📊 Ejemplo</button>
             <button class="btn-row" id="addRowBtn">➕ Fila</button>
@@ -192,7 +208,7 @@
         </div>
     </div>
     
-    <!-- Tesseract.js para OCR real -->
+    <!-- Tesseract.js desde CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>
