@@ -16,13 +16,13 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22'  # ← CAMBIADO A 22
+        node-version: '22'
     
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
-        java-version: '17'
+        java-version: '21'  # ← CAMBIADO A 21
     
     - name: Install dependencies
       run: |
