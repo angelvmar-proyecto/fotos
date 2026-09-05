@@ -1,9 +1,16 @@
 // ============================================================
-//  LECTOR DE TABLAS - CON OCR NATIVO (ML Kit)
-//  NO descarga modelos cada vez - Funciona offline
+//  LECTOR DE TABLAS - ML KIT NATIVO (HÍBRIDO)
+//  Carga de imágenes SIMPLE (como antes) + OCR nativo
 // ============================================================
 
-const { Ocr } = Capacitor.Plugins;
+// ===== IMPORTAR ML KIT (SIN ROMPER LA APP) =====
+let CapacitorOcr = null;
+try {
+    CapacitorOcr = Capacitor.Plugins.Ocr;
+    console.log("✅ ML Kit OCR disponible");
+} catch (e) {
+    console.warn("⚠️ ML Kit OCR no disponible:", e);
+}
 
 let currentImageFile = null;
 let tableData = [];
@@ -84,10 +91,10 @@ function setModo(modo) {
 }
 
 // ============================================================
-//  MANEJO DE IMÁGENES
+//  MANEJO DE IMÁGENES (ESTILO SIMPLE QUE FUNCIONABA)
 // ============================================================
 
-async function handleFile(file) {
+function handleFile(file) {
     console.log("📂 Archivo:", file.name, file.size);
 
     if (!file || !file.type.startsWith('image/')) {
@@ -95,42 +102,37 @@ async function handleFile(file) {
         return;
     }
 
-    try {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64 = e.target.result;
-            console.log("✅ Imagen cargada en base64. Longitud:", base64.length);
-            previewImage.src = base64;
-            previewImage.style.display = 'block';
-            currentImageFile = base64;
-            processBtn.disabled = false;
-            setStatus('📸 Imagen cargada.', 'info');
-        };
-        reader.onerror = function(e) {
-            console.error("❌ Error al leer la imagen:", e);
-            setStatus('❌ Error al leer el archivo', 'error');
-        };
-        reader.readAsDataURL(file);
-    } catch (error) {
-        console.error("❌ Error en handleFile:", error);
-        setStatus('❌ Error: ' + error.message, 'error');
-    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const base64 = e.target.result;
+        console.log("✅ Imagen cargada. Longitud:", base64.length);
+        previewImage.src = base64;
+        previewImage.style.display = 'block';
+        currentImageFile = base64;
+        processBtn.disabled = false;
+        setStatus('📸 Imagen cargada.', 'info');
+    };
+    reader.onerror = function(e) {
+        console.error("❌ Error al leer la imagen:", e);
+        setStatus('❌ Error al leer el archivo', 'error');
+    };
+    reader.readAsDataURL(file);
 }
 
 // ============================================================
-//  INICIALIZAR ML KIT OCR
+//  INICIALIZAR ML KIT OCR (SIN ROMPER NADA)
 // ============================================================
 
 async function initOCR() {
     try {
         console.log("🔄 Inicializando ML Kit OCR...");
-        setStatus('⏳ Inicializando OCR nativo...', 'info');
+        setStatus('⏳ Inicializando OCR...', 'info');
         statusLoading.style.display = 'block';
-        statusLoading.textContent = '⏳ Inicializando OCR nativo...';
+        statusLoading.textContent = '⏳ Inicializando OCR...';
         showProgress(true, 10);
 
-        if (typeof Ocr === 'undefined') {
-            throw new Error('ML Kit OCR no está disponible. Revisa la instalación.');
+        if (!CapacitorOcr) {
+            throw new Error('ML Kit OCR no está disponible');
         }
 
         ocrReady = true;
@@ -168,7 +170,7 @@ async function reconocerTexto(imageData) {
         var base64ConPrefijo = canvas.toDataURL('image/jpeg', 0.9);
         var base64Data = base64ConPrefijo.split(',')[1];
         
-        const result = await Ocr.processImage({
+        const result = await CapacitorOcr.processImage({
             image: {
                 path: base64Data,
                 format: 'image/jpeg'
@@ -176,12 +178,18 @@ async function reconocerTexto(imageData) {
             language: 'es'
         });
         
-        console.log("✅ OCR completado. Bloques:", result.blocks.length);
+        console.log("✅ OCR completado. Bloques:", result.blocks ? result.blocks.length : 0);
+        
+        if (!result.blocks) {
+            return '';
+        }
         
         var textoCompleto = '';
         for (var i = 0; i < result.blocks.length; i++) {
-            for (var j = 0; j < result.blocks[i].lines.length; j++) {
-                textoCompleto += result.blocks[i].lines[j].text + '\n';
+            if (result.blocks[i].lines) {
+                for (var j = 0; j < result.blocks[i].lines.length; j++) {
+                    textoCompleto += result.blocks[i].lines[j].text + '\n';
+                }
             }
         }
         
@@ -472,7 +480,7 @@ function parsearPorPatron(texto) {
 }
 
 // ============================================================
-//  PROCESAR IMAGEN
+//  PROCESAR IMAGEN (ESTILO SIMPLE QUE FUNCIONABA)
 // ============================================================
 
 async function processImage() {
@@ -500,6 +508,7 @@ async function processImage() {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
 
+        // Cargar imagen (como siempre funcionó)
         var img = new Image();
         img.src = currentImageFile;
         await new Promise(function(resolve, reject) {
@@ -515,11 +524,12 @@ async function processImage() {
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
         showProgress(true, 30);
-        setStatus('📸 Aplicando OCR nativo...', 'info');
+        setStatus('📸 Aplicando OCR...', 'info');
 
+        // OCR con ML Kit
         try {
             text = await reconocerTexto(imageData);
-            console.log("✅ OCR completado. Longitud:", text.length);
+            console.log("✅ OCR completado. Longitud:", text ? text.length : 0);
             
             if (text && text.length > 0) {
                 showOcrResult(text);
@@ -534,7 +544,7 @@ async function processImage() {
             }
         } catch (e) {
             console.error("❌ Error en OCR:", e);
-            setStatus('❌ Error en OCR nativo', 'error');
+            setStatus('❌ Error en OCR', 'error');
             showProgress(true, 100);
             isProcessing = false;
             processBtn.disabled = false;
@@ -544,6 +554,7 @@ async function processImage() {
 
         showProgress(true, 50);
 
+        // Modo 1: Líneas
         if (modoActual === 'lineas') {
             try {
                 tableDataResult = await extraerPorLineas(imageData);
@@ -555,6 +566,7 @@ async function processImage() {
             }
         }
 
+        // Modo 2: Espacios
         if ((!tableDataResult || tableDataResult.length === 0) && modoActual === 'espacios') {
             try {
                 var parsed = detectTableBySpacing(text);
@@ -567,6 +579,7 @@ async function processImage() {
             }
         }
 
+        // Modo 3: Patrón
         if ((!tableDataResult || tableDataResult.length === 0) && modoActual === 'patron') {
             try {
                 var parsed = parsearPorPatron(text);
@@ -579,6 +592,7 @@ async function processImage() {
             }
         }
 
+        // Mostrar resultados
         if (tableDataResult && tableDataResult.length > 0) {
             var cleanData = tableDataResult.filter(function(row) {
                 return row && row.some(function(cell) { return cell && cell.length > 0; });
@@ -613,7 +627,7 @@ async function processImage() {
 }
 
 // ============================================================
-//  RENDERIZAR TABLA
+//  RENDERIZAR TABLA (TODO IGUAL)
 // ============================================================
 
 function renderTable(data) {
