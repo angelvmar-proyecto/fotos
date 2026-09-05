@@ -1,6 +1,7 @@
 // ============================================================
 //  LECTOR DE TABLAS - DETECCIÓN POR ÁNGULOS DE 90°
 //  DETECCIÓN MEJORADA PARA EXCEL Y WHATSAPP
+//  CON CACHÉ PARA IDIOMA ESPAÑOL
 // ============================================================
 
 let currentImageFile = null;
@@ -73,7 +74,7 @@ function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT
+//  INICIALIZAR TESSERACT CON CACHÉ
 // ============================================================
 
 async function initTesseract() {
@@ -82,11 +83,20 @@ async function initTesseract() {
             throw new Error('Tesseract no está disponible.');
         }
 
+        // Verificar si ya está cargado en localStorage
+        const ocrReady = localStorage.getItem('tesseract_ready');
+        if (ocrReady === 'true' && worker) {
+            tesseractReady = true;
+            setStatus('✅ OCR listo (desde caché).', 'success');
+            return true;
+        }
+
         statusLoading.style.display = 'block';
         statusLoading.textContent = '⏳ Cargando OCR...';
         setStatus('⏳ Cargando OCR...', 'info');
         showProgress(true, 5);
 
+        // Crear worker con idioma español
         worker = await Tesseract.createWorker('spa', 1, {
             logger: m => {
                 if (m.status === 'loading tesseract core') {
@@ -110,6 +120,9 @@ async function initTesseract() {
             tessedit_pageseg_mode: 6,
         });
 
+        // Guardar en localStorage que ya está listo
+        localStorage.setItem('tesseract_ready', 'true');
+        
         showProgress(true, 100);
         tesseractReady = true;
         statusLoading.style.display = 'none';
@@ -123,6 +136,7 @@ async function initTesseract() {
         setStatus(`❌ Error: ${error.message}`, 'error');
         showProgress(false);
         tesseractReady = false;
+        localStorage.removeItem('tesseract_ready');
         return false;
     }
 }
@@ -570,7 +584,30 @@ async function processImage() {
         setStatus('🔍 Leyendo cada celda...', 'info');
 
         // Extraer cada celda con OCR
-        const tableDataResult = await extractCellsWithOCR(imageData, cells);
+        let tableDataResult = [];
+        try {
+            tableDataResult = await extractCellsWithOCR(imageData, cells);
+        } catch (ocrError) {
+            console.warn('Error en OCR de celdas:', ocrError);
+            // Si falla, intentar con OCR normal de toda la imagen
+            setStatus('⚠️ Error en celdas. Usando OCR general...', 'warning');
+            const enhancedCanvas = document.createElement('canvas');
+            enhancedCanvas.width = width;
+            enhancedCanvas.height = height;
+            const eCtx = enhancedCanvas.getContext('2d');
+            eCtx.putImageData(imageData, 0, 0);
+            const { data: { text } } = await worker.recognize(enhancedCanvas);
+            showOcrResult(text);
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length > 0) {
+                tableData = [['Texto extraído'], ...lines.map(l => [l])];
+                renderTable(tableData);
+                setStatus('⚠️ Usando OCR general por error en celdas.', 'warning');
+                showProgress(true, 100);
+                setTimeout(() => showProgress(false), 1000);
+                return;
+            }
+        }
         
         showProgress(true, 90);
         setStatus('📋 Reconstruyendo tabla...', 'info');
@@ -748,6 +785,17 @@ function copyTable() {
 }
 
 // ============================================================
+//  LIMPIAR CACHÉ DE OCR (OPCIONAL)
+// ============================================================
+
+function clearOCRCache() {
+    localStorage.removeItem('tesseract_ready');
+    setStatus('🗑️ Caché de OCR limpiado. Reinicia la app.', 'info');
+    tesseractReady = false;
+    worker = null;
+}
+
+// ============================================================
 //  UTILIDADES
 // ============================================================
 
@@ -787,6 +835,14 @@ addRowBtn.addEventListener('click', addRow);
 addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
+// Limpiar caché con doble toque en el título
+document.querySelector('h1').addEventListener('dblclick', () => {
+    if (confirm('¿Limpiar caché de OCR? (Esto forzará recargar el idioma español)')) {
+        clearOCRCache();
+        alert('Caché limpiado. Reinicia la app para recargar el OCR.');
+    }
+});
+
 // ============================================================
 //  INICIO
 // ============================================================
@@ -799,3 +855,5 @@ setTimeout(async () => {
 
 console.log('📊 Lector de Tablas - Detección por ángulos de 90°');
 console.log('📐 Optimizado para Excel y WhatsApp');
+console.log('💾 Caché de OCR activado');
+console.log('🔄 Doble toque en el título para limpiar caché');
