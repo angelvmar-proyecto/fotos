@@ -1,12 +1,14 @@
 // ============================================================
-//  LECTOR DE TABLAS - CON MODELOS GUARDADOS Y MEJORA DE CONTRASTE
+//  LECTOR DE TABLAS - CON OCR NATIVO (ML Kit)
+//  NO descarga modelos cada vez - Funciona offline
 // ============================================================
+
+import { Ocr, OcrOptions } from '@capacitor-mlkit/ocr';
 
 let currentImageFile = null;
 let tableData = [];
-let worker = null;
 let isProcessing = false;
-let tesseractReady = false;
+let ocrReady = false;
 let modoActual = 'lineas';
 
 // ===== DOM REFERENCIAS =====
@@ -82,155 +84,111 @@ function setModo(modo) {
 }
 
 // ============================================================
-//  MEJORAR CONTRASTE DE LA IMAGEN (ANTES DEL OCR)
-// ============================================================
-
-function mejorarContraste(imageData) {
-    var data = imageData.data;
-    var width = imageData.width;
-    var height = imageData.height;
-    
-    // 1. Calcular histograma
-    var histogram = new Array(256).fill(0);
-    for (var i = 0; i < data.length; i += 4) {
-        var gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-        var idx = Math.round(gray);
-        if (idx >= 0 && idx < 256) histogram[idx]++;
-    }
-    
-    // 2. Encontrar percentiles 5% y 95%
-    var totalPixels = width * height;
-    var minPercent = 0.05;
-    var maxPercent = 0.95;
-    var minThreshold = 0;
-    var maxThreshold = 255;
-    var acumulado = 0;
-    
-    for (var i = 0; i < 256; i++) {
-        acumulado += histogram[i];
-        if (acumulado / totalPixels >= minPercent) {
-            minThreshold = i;
-            break;
-        }
-    }
-    
-    acumulado = 0;
-    for (var i = 255; i >= 0; i--) {
-        acumulado += histogram[i];
-        if (acumulado / totalPixels >= (1 - maxPercent)) {
-            maxThreshold = i;
-            break;
-        }
-    }
-    
-    // 3. Aplicar estiramiento de contraste
-    for (var i = 0; i < data.length; i += 4) {
-        var gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-        var nuevoValor = (gray - minThreshold) * 255 / (maxThreshold - minThreshold);
-        nuevoValor = Math.max(0, Math.min(255, nuevoValor));
-        data[i] = nuevoValor;
-        data[i+1] = nuevoValor;
-        data[i+2] = nuevoValor;
-    }
-    
-    console.log('✅ Contraste mejorado. Umbrales:', minThreshold, '-', maxThreshold);
-    return imageData;
-}
-
-// ============================================================
 //  MANEJO DE IMÁGENES
 // ============================================================
 
 async function handleFile(file) {
-    console.log("📂 Archivo seleccionado:", file.name, "Tamaño:", file.size);
+    console.log("📂 Archivo:", file.name, file.size);
 
     if (!file || !file.type.startsWith('image/')) {
-        setStatus('⚠️ Sube una imagen válida (JPG, PNG, WEBP)', 'error');
+        setStatus('⚠️ Sube una imagen válida', 'error');
         return;
     }
 
     try {
         const reader = new FileReader();
         reader.onload = function(e) {
-            console.log("✅ Imagen convertida a base64");
             previewImage.src = e.target.result;
             previewImage.style.display = 'block';
             currentImageFile = e.target.result;
             processBtn.disabled = false;
             setStatus('📸 Imagen cargada.', 'info');
         };
-        reader.onerror = function(e) {
-            console.error("❌ Error al leer la imagen:", e);
-            setStatus('❌ Error al leer el archivo', 'error');
-        };
         reader.readAsDataURL(file);
     } catch (error) {
-        console.error("❌ Error en handleFile:", error);
         setStatus('❌ Error: ' + error.message, 'error');
     }
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT CON GUARDADO PERMANENTE
+//  INICIALIZAR ML KIT OCR (NATIVO - SIN DESCARGAS)
 // ============================================================
 
-async function initTesseract() {
-    console.log("🔄 Iniciando carga de Tesseract...");
+async function initOCR() {
     try {
-        if (typeof Tesseract === 'undefined') {
-            throw new Error('Tesseract no está disponible. Conéctate a internet.');
+        console.log("🔄 Inicializando ML Kit OCR...");
+        setStatus('⏳ Inicializando OCR nativo...', 'info');
+        statusLoading.style.display = 'block';
+        statusLoading.textContent = '⏳ Inicializando OCR nativo...';
+        showProgress(true, 10);
+
+        // Verificar si el plugin está disponible
+        if (typeof Ocr === 'undefined') {
+            throw new Error('ML Kit OCR no está disponible. Revisa la instalación.');
         }
 
-        statusLoading.style.display = 'block';
-        statusLoading.textContent = '⏳ Cargando OCR...';
-        setStatus('⏳ Cargando OCR...', 'info');
-        showProgress(true, 5);
-
-        // Configuración para guardar modelos en caché persistente
-        worker = await Tesseract.createWorker('spa', 1, {
-            logger: function(m) {
-                console.log("📊 Progreso:", m.status, m.progress || '');
-                if (m.status === 'loading tesseract core') {
-                    showProgress(true, 20);
-                    statusLoading.textContent = '📦 Cargando motor OCR...';
-                } else if (m.status === 'loading language traineddata') {
-                    showProgress(true, 50);
-                    var pct = Math.round((m.progress || 0) * 100);
-                    statusLoading.textContent = '📚 Cargando idioma español (' + pct + '%)...';
-                } else if (m.status === 'initializing api') {
-                    showProgress(true, 75);
-                    statusLoading.textContent = '🚀 Inicializando...';
-                } else if (m.status === 'recognizing text') {
-                    var pct = Math.round(75 + (m.progress * 25));
-                    showProgress(true, pct);
-                    statusLoading.textContent = '🔍 Reconociendo... ' + pct + '%';
-                }
-            },
-            // Forzar que los modelos se guarden en caché persistente
-            cachePath: 'tesseract_cache',
-            cacheMethod: 'fs'
-        });
-
-        await worker.setParameters({
-            tessedit_pageseg_mode: 6,
-            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;%$€£@#+-/() '
-        });
-
-        showProgress(true, 100);
-        tesseractReady = true;
+        // ML Kit no requiere descarga de modelos en primer uso
+        // Los modelos vienen con el plugin nativo
+        ocrReady = true;
         statusLoading.style.display = 'none';
-        setStatus('✅ OCR listo.', 'success');
-        console.log("✅ Tesseract cargado correctamente");
+        setStatus('✅ OCR nativo listo.', 'success');
+        showProgress(true, 100);
         setTimeout(function() { showProgress(false); }, 1000);
+        console.log("✅ ML Kit OCR listo");
         return true;
     } catch (error) {
-        console.error('❌ Error en initTesseract:', error);
+        console.error('❌ Error initOCR:', error);
         statusLoading.style.display = 'block';
         statusLoading.textContent = '❌ Error: ' + error.message;
         setStatus('❌ Error: ' + error.message, 'error');
         showProgress(false);
-        tesseractReady = false;
+        ocrReady = false;
         return false;
+    }
+}
+
+// ============================================================
+//  OCR CON ML KIT (NATIVO)
+// ============================================================
+
+async function reconocerTexto(imageData) {
+    try {
+        console.log("📸 Enviando imagen a ML Kit OCR...");
+        
+        // Convertir ImageData a base64
+        var canvas = document.createElement('canvas');
+        canvas.width = imageData.width;
+        canvas.height = imageData.height;
+        var ctx = canvas.getContext('2d');
+        ctx.putImageData(imageData, 0, 0);
+        var base64 = canvas.toDataURL('image/jpeg', 0.9);
+        
+        // Extraer solo el base64 sin el prefijo
+        var base64Data = base64.split(',')[1];
+        
+        // Ejecutar OCR con ML Kit
+        const result = await Ocr.processImage({
+            image: {
+                path: base64Data,
+                format: 'image/jpeg'
+            },
+            language: 'es'
+        });
+        
+        console.log("✅ OCR completado. Bloques:", result.blocks.length);
+        
+        // Extraer todo el texto
+        var textoCompleto = '';
+        for (var i = 0; i < result.blocks.length; i++) {
+            for (var j = 0; j < result.blocks[i].lines.length; j++) {
+                textoCompleto += result.blocks[i].lines[j].text + '\n';
+            }
+        }
+        
+        return textoCompleto;
+    } catch (error) {
+        console.error('❌ Error en OCR:', error);
+        return '';
     }
 }
 
@@ -375,8 +333,8 @@ async function extraerPorLineas(imageData) {
             
             try {
                 var cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
-                var result = await worker.recognize(cellImageData);
-                rowData.push(result.data.text.trim());
+                var text = await reconocerTexto(cellImageData);
+                rowData.push(text.trim());
             } catch (e) {
                 rowData.push('');
             }
@@ -525,9 +483,9 @@ async function processImage() {
         return;
     }
 
-    if (!tesseractReady) {
-        setStatus('⏳ Cargando OCR...', 'warning');
-        var ready = await initTesseract();
+    if (!ocrReady) {
+        setStatus('⏳ Inicializando OCR...', 'warning');
+        var ready = await initOCR();
         if (!ready) return;
     }
 
@@ -556,18 +514,12 @@ async function processImage() {
         ctx.drawImage(img, 0, 0);
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // ===== MEJORAR CONTRASTE =====
-        console.log("🎨 Mejorando contraste...");
-        imageData = mejorarContraste(imageData);
+        // ===== OCR NATIVO =====
         showProgress(true, 30);
-
-        // ===== OCR =====
-        console.log("📸 Enviando imagen a Tesseract...");
-        setStatus('📸 Aplicando OCR...', 'info');
+        setStatus('📸 Aplicando OCR nativo...', 'info');
 
         try {
-            var result = await worker.recognize(imageData);
-            text = result.data.text || '';
+            text = await reconocerTexto(imageData);
             console.log("✅ OCR completado. Longitud:", text.length);
             
             if (text && text.length > 0) {
@@ -583,7 +535,7 @@ async function processImage() {
             }
         } catch (e) {
             console.error("❌ Error en OCR:", e);
-            setStatus('❌ Error en OCR', 'error');
+            setStatus('❌ Error en OCR nativo', 'error');
             showProgress(true, 100);
             isProcessing = false;
             processBtn.disabled = false;
@@ -874,11 +826,11 @@ if (modoLineasBtn) modoLineasBtn.addEventListener('click', function() { setModo(
 if (modoEspaciosBtn) modoEspaciosBtn.addEventListener('click', function() { setModo('espacios'); });
 if (modoPatronBtn) modoPatronBtn.addEventListener('click', function() { setModo('patron'); });
 
-console.log("🚀 Iniciando app...");
+console.log("🚀 Iniciando app con ML Kit nativo...");
 setModo('lineas');
 
 setTimeout(function() {
-    initTesseract().then(function(result) {
-        console.log("🔚 initTesseract resultado:", result);
+    initOCR().then(function(result) {
+        console.log("🔚 initOCR resultado:", result);
     });
 }, 1000);
