@@ -1,6 +1,6 @@
 // ============================================================
 //  LECTOR DE TABLAS - 5 MÉTODOS DE DETECCIÓN
-//  Líneas | Texto | Híbrido | ML | Contornos (NUEVO)
+//  Líneas | Texto | Híbrido | ML | Contornos
 // ============================================================
 
 let currentImageFile = null;
@@ -8,7 +8,6 @@ let tableData = [];
 let worker = null;
 let isProcessing = false;
 let tesseractReady = false;
-let currentMethod = 'contours';
 let imageDataCache = null;
 
 // ===== DOM REFERENCIAS =====
@@ -101,7 +100,6 @@ function handleFile(file) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'block';
         processBtn.disabled = false;
-        // Habilitar botones de métodos
         [methodLines, methodText, methodHybrid, methodML, methodContours].forEach(b => b.disabled = false);
         setStatus('📸 Imagen cargada. Elige un método y toca "Extraer".', 'info');
     };
@@ -109,20 +107,13 @@ function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR TESSERACT CON CACHÉ
+//  INICIALIZAR TESSERACT
 // ============================================================
 
 async function initTesseract() {
     try {
         if (typeof Tesseract === 'undefined') {
             throw new Error('Tesseract no está disponible.');
-        }
-
-        const ocrReady = localStorage.getItem('tesseract_ready');
-        if (ocrReady === 'true' && worker) {
-            tesseractReady = true;
-            setStatus('✅ OCR listo (desde caché).', 'success');
-            return true;
         }
 
         statusLoading.style.display = 'block';
@@ -153,8 +144,6 @@ async function initTesseract() {
             tessedit_pageseg_mode: 6,
         });
 
-        localStorage.setItem('tesseract_ready', 'true');
-        
         showProgress(true, 100);
         tesseractReady = true;
         statusLoading.style.display = 'none';
@@ -168,7 +157,6 @@ async function initTesseract() {
         setStatus(`❌ Error: ${error.message}`, 'error');
         showProgress(false);
         tesseractReady = false;
-        localStorage.removeItem('tesseract_ready');
         return false;
     }
 }
@@ -635,7 +623,7 @@ function calculateAverageDarkness(binary, width, height) {
 }
 
 // ============================================================
-//  MÉTODO 5: CONTORNOS (EL NUEVO MÉTODO PROFESIONAL)
+//  MÉTODO 5: CONTORNOS (NUEVO - DETECCIÓN POR CONTORNOS DE TEXTO)
 // ============================================================
 
 function detectTableByContours(imageData) {
@@ -643,32 +631,29 @@ function detectTableByContours(imageData) {
     const height = imageData.height;
     const data = imageData.data;
     
-    // 1. Preprocesamiento: Umbral adaptativo
+    // 1. Preprocesamiento
     const binary = new Uint8Array(width * height);
     for (let i = 0; i < data.length; i += 4) {
         const idx = i / 4;
         const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-        // Umbral adaptativo: usar la media local
         binary[idx] = gray < 128 ? 0 : 255;
     }
     
     // 2. Encontrar contornos (regiones de texto)
     const contours = findContours(binary, width, height);
     
-    // 3. Filtrar contornos pequeños (ruido)
-    const minArea = (width * height) * 0.001; // 0.1% del área total
+    // 3. Filtrar contornos pequeños
+    const minArea = (width * height) * 0.0005;
     const filteredContours = contours.filter(c => c.area > minArea);
     
-    // 4. Agrupar contornos por proximidad (clustering)
+    // 4. Agrupar contornos por proximidad
     const groups = clusterContours(filteredContours, width, height);
     
     // 5. Crear líneas de grid desde los grupos
     const gridLines = createGridFromGroups(groups, width, height);
     
-    console.log(`🔲 Contornos encontrados: ${contours.length}`);
-    console.log(`🔲 Contornos filtrados: ${filteredContours.length}`);
-    console.log(`🔲 Grupos de contornos: ${groups.length}`);
-    console.log(`🔲 Líneas de grid: H=${gridLines.horizontalLines.length}, V=${gridLines.verticalLines.length}`);
+    console.log(`🔲 Contornos: ${contours.length} → ${filteredContours.length} → ${groups.length} grupos`);
+    console.log(`🔲 Grid: H=${gridLines.horizontalLines.length}, V=${gridLines.verticalLines.length}`);
     
     return gridLines;
 }
@@ -681,10 +666,8 @@ function findContours(binary, width, height) {
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
             if (binary[idx] === 0 && !visited[idx]) {
-                // Encontrar contorno completo
                 const contour = extractContour(binary, visited, width, height, x, y);
                 if (contour.length > 10) {
-                    // Calcular bounding box y centroide
                     let minX = Infinity, maxX = -Infinity;
                     let minY = Infinity, maxY = -Infinity;
                     let sumX = 0, sumY = 0;
@@ -744,13 +727,12 @@ function clusterContours(contours, width, height) {
     if (contours.length === 0) return [];
     
     const groups = [];
-    const thresholdX = width * 0.02; // 2% del ancho
-    const thresholdY = height * 0.02; // 2% del alto
+    const thresholdX = width * 0.02;
+    const thresholdY = height * 0.02;
     
     for (const contour of contours) {
         let added = false;
         for (const group of groups) {
-            // Verificar si el contorno está cerca del grupo
             const avgX = group.reduce((s, c) => s + c.centerX, 0) / group.length;
             const avgY = group.reduce((s, c) => s + c.centerY, 0) / group.length;
             
@@ -774,7 +756,6 @@ function createGridFromGroups(groups, width, height) {
         return { horizontalLines: [], verticalLines: [], intersections: [] };
     }
     
-    // Calcular centroides de grupos
     const centroids = groups.map(group => {
         const sumX = group.reduce((s, c) => s + c.centerX, 0);
         const sumY = group.reduce((s, c) => s + c.centerY, 0);
@@ -785,10 +766,8 @@ function createGridFromGroups(groups, width, height) {
         };
     });
     
-    // Ordenar por Y (filas)
     const sortedByY = [...centroids].sort((a, b) => a.y - b.y);
     
-    // Agrupar por filas
     const rows = [];
     let currentRow = [];
     const thresholdY = height * 0.03;
@@ -806,12 +785,10 @@ function createGridFromGroups(groups, width, height) {
     }
     if (currentRow.length > 1) rows.push(currentRow);
     
-    // Para cada fila, ordenar por X (columnas)
     const tableRows = rows.map(row => 
         [...row].sort((a, b) => a.x - b.x)
     );
     
-    // Generar líneas horizontales (entre filas)
     const horizontalLines = [];
     for (let i = 0; i < tableRows.length - 1; i++) {
         const row1 = tableRows[i];
@@ -820,7 +797,6 @@ function createGridFromGroups(groups, width, height) {
         horizontalLines.push({ y, x1: 0, x2: width });
     }
     
-    // Generar líneas verticales (entre columnas)
     const verticalLines = [];
     const numCols = Math.min(...tableRows.map(row => row.length));
     for (let col = 0; col < numCols - 1; col++) {
@@ -838,7 +814,6 @@ function createGridFromGroups(groups, width, height) {
         }
     }
     
-    // Generar intersecciones
     const intersections = [];
     for (const h of horizontalLines) {
         for (const v of verticalLines) {
@@ -1007,34 +982,26 @@ async function recognizeCell(canvas) {
 
 async function processWithMethod(method, imageData) {
     let result;
-    let methodName = '';
     
     switch(method) {
         case 'lines':
-            methodName = 'Líneas';
             result = detectLines(imageData);
             break;
         case 'text':
-            methodName = 'Texto';
             result = detectTableFromText(detectTextBlocks(imageData), imageData.width, imageData.height);
             break;
         case 'hybrid':
-            methodName = 'Híbrido';
             result = detectTableHybrid(imageData);
             break;
         case 'ml':
-            methodName = 'ML';
             result = detectTableML(imageData);
             break;
         case 'contours':
-            methodName = 'Contornos';
             result = detectTableByContours(imageData);
             break;
         default:
             result = detectTableByContours(imageData);
     }
-    
-    console.log(`📊 Método ${methodName}: ${result.intersections.length} intersecciones`);
     
     return result;
 }
@@ -1086,7 +1053,6 @@ async function processImage() {
         const imageData = ctx.getImageData(0, 0, width, height);
         imageDataCache = imageData;
 
-        // Procesar con todos los métodos
         showProgress(true, 20);
         setStatus('🧪 Probando 5 métodos de detección...', 'info');
 
@@ -1103,7 +1069,6 @@ async function processImage() {
                 const result = await processWithMethod(m, imageData);
                 resultsMap[m] = result;
                 
-                // Actualizar badges
                 const count = result.intersections.length;
                 const badge = badges[m];
                 if (badge) {
@@ -1111,7 +1076,6 @@ async function processImage() {
                     badge.style.background = count > 4 ? '#2ECC71' : '#ff6b6b';
                 }
                 
-                // Actualizar estadísticas
                 const statMap = { 
                     lines: statLines, 
                     text: statText, 
@@ -1124,7 +1088,6 @@ async function processImage() {
                     statMap[m].parentElement.style.borderColor = count > 4 ? '#2ECC71' : '#ff6b6b';
                 }
                 
-                // Guardar resultado
                 results[m] = result;
                 
             } catch (e) {
@@ -1139,7 +1102,6 @@ async function processImage() {
             showProgress(true, 20 + (i * 12));
         }
 
-        // Seleccionar el mejor método
         let bestMethod = 'contours';
         let bestCount = 0;
         for (const m of methods) {
@@ -1152,11 +1114,10 @@ async function processImage() {
         showProgress(true, 85);
         setStatus(`✅ Mejor método: ${bestMethod.toUpperCase()} (${bestCount} intersecciones)`, 'success');
 
-        // Usar el mejor método
         const bestResult = resultsMap[bestMethod];
         
         if (bestResult.intersections.length < 4) {
-            setStatus('⚠️ No se detectó tabla en ningún método. Usando OCR general...', 'warning');
+            setStatus('⚠️ No se detectó tabla. Usando OCR general...', 'warning');
             const { data: { text } } = await worker.recognize(imageData);
             showOcrResult(text);
             const lines = text.split('\n').filter(l => l.trim());
@@ -1223,7 +1184,6 @@ async function processWithSpecificMethod(method) {
     if (isProcessing) return;
     isProcessing = true;
 
-    // Activar botón visualmente
     const btnMap = { 
         lines: methodLines, 
         text: methodText, 
@@ -1391,7 +1351,6 @@ function clearTable() {
         renderTable(tableData);
         downloadBtn.disabled = true;
         copyBtn.disabled = true;
-        // Limpiar estadísticas
         ['lines', 'text', 'hybrid', 'ml', 'contours'].forEach(m => {
             badges[m].textContent = '-';
             badges[m].style.background = '#95A5A6';
@@ -1463,17 +1422,6 @@ function copyTable() {
 }
 
 // ============================================================
-//  LIMPIAR CACHÉ DE OCR
-// ============================================================
-
-function clearOCRCache() {
-    localStorage.removeItem('tesseract_ready');
-    setStatus('🗑️ Caché de OCR limpiado. Reinicia la app.', 'info');
-    tesseractReady = false;
-    worker = null;
-}
-
-// ============================================================
 //  UTILIDADES
 // ============================================================
 
@@ -1514,7 +1462,6 @@ addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 clearMethodsBtn.addEventListener('click', clearMethodsStats);
 
-// Botones de métodos
 const btnMap = {
     lines: methodLines,
     text: methodText,
@@ -1529,13 +1476,6 @@ Object.keys(btnMap).forEach(method => {
     });
 });
 
-document.querySelector('h1').addEventListener('dblclick', () => {
-    if (confirm('¿Limpiar caché de OCR? (Esto forzará recargar el idioma español)')) {
-        clearOCRCache();
-        alert('Caché limpiado. Reinicia la app para recargar el OCR.');
-    }
-});
-
 // ============================================================
 //  INICIO
 // ============================================================
@@ -1547,6 +1487,4 @@ setTimeout(async () => {
 }, 1000);
 
 console.log('📊 Lector de Tablas - 5 Métodos de Detección');
-console.log('📐 Líneas | Texto | Híbrido | ML | Contornos (NUEVO)');
-console.log('💾 Caché de OCR activado');
-console.log('🔄 Doble toque en el título para limpiar caché');
+console.log('📐 Líneas | Texto | Híbrido | ML | Contornos');

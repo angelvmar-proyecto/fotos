@@ -1,27 +1,440 @@
-<div class="methods-grid">
-    <button class="method-btn btn-lines" id="methodLines" disabled>
-        📐 Líneas
-        <span class="small">Detección por líneas</span>
-        <span class="badge-result" id="badgeLines">-</span>
-    </button>
-    <button class="method-btn btn-text" id="methodText" disabled>
-        📝 Texto
-        <span class="small">Detección por texto</span>
-        <span class="badge-result" id="badgeText">-</span>
-    </button>
-    <button class="method-btn btn-hybrid" id="methodHybrid" disabled>
-        🔄 Híbrido
-        <span class="small">Líneas + Texto</span>
-        <span class="badge-result" id="badgeHybrid">-</span>
-    </button>
-    <button class="method-btn btn-ml" id="methodML" disabled>
-        🧠 ML
-        <span class="small">Machine Learning</span>
-        <span class="badge-result" id="badgeML">-</span>
-    </button>
-    <button class="method-btn btn-contours" id="methodContours" disabled style="grid-column: span 2; background: #E74C3C;">
-        🔲 Contornos
-        <span class="small">Detección por contornos de texto</span>
-        <span class="badge-result" id="badgeContours">-</span>
-    </button>
-</div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📊 Lector de Tablas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 24px 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a202c;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #4a5568;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .badge-version {
+            display: inline-block;
+            background: #25D366;
+            color: white;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+        }
+
+        #statusLoading {
+            background: #fef3c7;
+            padding: 10px 14px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #92400e;
+            display: none;
+            margin-bottom: 12px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .upload-area {
+            border: 3px dashed #25D366;
+            border-radius: 16px;
+            padding: 32px 16px;
+            text-align: center;
+            background: #f0fdf4;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.1s ease;
+            margin-bottom: 16px;
+        }
+
+        .upload-area:active {
+            transform: scale(0.97);
+            background: #dcfce7;
+        }
+
+        .upload-area .icon {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .upload-area h3 {
+            color: #1a202c;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .upload-area p {
+            color: #718096;
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        #previewImage {
+            max-width: 100%;
+            max-height: 320px;
+            border-radius: 12px;
+            margin: 10px 0 14px 0;
+            display: none;
+            border: 2px solid #25D366;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .methods-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            margin: 12px 0 10px 0;
+        }
+
+        .method-btn {
+            padding: 8px 4px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            position: relative;
+            min-height: 40px;
+        }
+
+        .method-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .method-btn:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .method-btn .small {
+            font-size: 0.55rem;
+            opacity: 0.8;
+            display: block;
+            font-weight: 400;
+        }
+
+        .method-btn .badge-result {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #95A5A6;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 0.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .btn-lines { background: #4A90D9; }
+        .btn-text { background: #E67E22; }
+        .btn-hybrid { background: #2ECC71; }
+        .btn-ml { background: #9B59B6; }
+        .btn-contours { background: #E74C3C; }
+
+        .method-btn.active {
+            box-shadow: 0 0 0 3px #fff, 0 0 0 6px currentColor;
+        }
+
+        .btn-lines.active { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #4A90D9; }
+        .btn-text.active { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #E67E22; }
+        .btn-hybrid.active { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #2ECC71; }
+        .btn-ml.active { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #9B59B6; }
+        .btn-contours.active { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #E74C3C; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 8px 0 12px 0;
+            flex-wrap: wrap;
+        }
+
+        .controls button {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            min-width: 60px;
+            color: white;
+        }
+
+        .controls button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary { background: #25D366; }
+        .btn-success { background: #128C7E; }
+        .btn-info { background: #075E54; }
+        .btn-clear-methods { background: #95A5A6; flex: 0.3; }
+
+        .progress-bar {
+            height: 20px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 8px 0 12px 0;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #25D366, #128C7E);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            padding: 8px 14px;
+            border-radius: 10px;
+            margin: 4px 0 10px 0;
+            text-align: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-info { background: #dbeafe; color: #1e3a8a; }
+        .status-success { background: #dcfce7; color: #166534; }
+        .status-error { background: #fee2e2; color: #991b1b; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+
+        .ocr-result {
+            background: #0d1117;
+            color: #00ff41;
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin: 10px 0 14px 0;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 0.7rem;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            display: none;
+            border: 1px solid #00ff41;
+        }
+
+        .comparison-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            margin: 8px 0 10px 0;
+        }
+
+        .stat-card {
+            background: #f8fafc;
+            padding: 4px 4px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 0.6rem;
+            border-left: 3px solid #25D366;
+        }
+
+        .stat-card .num {
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: block;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 12px 0;
+            align-items: center;
+        }
+
+        .toolbar button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: white;
+            transition: transform 0.1s;
+        }
+
+        .toolbar button:active { transform: scale(0.95); }
+        .btn-row { background: #34D399; }
+        .btn-col { background: #60A5FA; }
+        .btn-clear { background: #F87171; }
+
+        .badge {
+            background: #075E54;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            margin: 14px 0 0 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            max-height: 420px;
+            overflow-y: auto;
+        }
+
+        #resultTable {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        #resultTable thead { position: sticky; top: 0; z-index: 10; }
+        #resultTable th { background: #075E54; color: white; padding: 10px 12px; text-align: left; font-weight: 600; }
+        #resultTable td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; min-height: 36px; word-break: break-word; }
+        #resultTable tr:nth-child(even) { background: #f8fafc; }
+        #resultTable tr:hover { background: #e6f7e6; }
+
+        @media (max-width: 480px) {
+            .container { padding: 16px 12px; }
+            h1 { font-size: 1.3rem; }
+            .methods-grid { grid-template-columns: 1fr 1fr 1fr; }
+            .method-btn { font-size: 0.6rem; padding: 6px 2px; min-height: 34px; }
+            .comparison-stats { grid-template-columns: repeat(3, 1fr); }
+            .controls button { font-size: 0.7rem; padding: 8px 4px; }
+            .stat-card .num { font-size: 0.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <h1>📊 Lector de Tablas <span class="badge-version">v2.0</span></h1>
+        <p class="subtitle">5 métodos de detección - Prueba y compara</p>
+
+        <div id="statusLoading">⏳ Cargando OCR...</div>
+
+        <div class="upload-area" id="dropZone">
+            <span class="icon">📸</span>
+            <h3>Toca para subir captura</h3>
+            <p>JPG, PNG, WEBP</p>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+
+        <img id="previewImage" alt="Vista previa">
+
+        <div class="methods-grid">
+            <button class="method-btn btn-lines" id="methodLines" disabled>
+                📐 Líneas
+                <span class="small">Detección por líneas</span>
+                <span class="badge-result" id="badgeLines">-</span>
+            </button>
+            <button class="method-btn btn-text" id="methodText" disabled>
+                📝 Texto
+                <span class="small">Detección por texto</span>
+                <span class="badge-result" id="badgeText">-</span>
+            </button>
+            <button class="method-btn btn-hybrid" id="methodHybrid" disabled>
+                🔄 Híbrido
+                <span class="small">Líneas + Texto</span>
+                <span class="badge-result" id="badgeHybrid">-</span>
+            </button>
+            <button class="method-btn btn-ml" id="methodML" disabled>
+                🧠 ML
+                <span class="small">Machine Learning</span>
+                <span class="badge-result" id="badgeML">-</span>
+            </button>
+            <button class="method-btn btn-contours" id="methodContours" disabled>
+                🔲 Contornos
+                <span class="small">Detección por contornos</span>
+                <span class="badge-result" id="badgeContours">-</span>
+            </button>
+        </div>
+
+        <div class="controls">
+            <button id="processBtn" class="btn-primary" disabled>🔍 Extraer</button>
+            <button id="downloadBtn" class="btn-success" disabled>📥 CSV</button>
+            <button id="copyBtn" class="btn-info" disabled>📋 Copiar</button>
+            <button id="clearMethodsBtn" class="btn-clear-methods">🗑️</button>
+        </div>
+
+        <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div id="status" class="status status-info">📸 Sube una captura de pantalla</div>
+
+        <div class="ocr-result" id="ocrResult"></div>
+
+        <div class="comparison-stats">
+            <div class="stat-card"><span class="num" id="statLines">-</span>Líneas</div>
+            <div class="stat-card"><span class="num" id="statText">-</span>Texto</div>
+            <div class="stat-card"><span class="num" id="statHybrid">-</span>Híbrido</div>
+            <div class="stat-card"><span class="num" id="statML">-</span>ML</div>
+            <div class="stat-card" style="border-left-color: #E74C3C;"><span class="num" id="statContours" style="color: #E74C3C;">-</span>Contornos</div>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn-row" id="addRowBtn">➕ Fila</button>
+            <button class="btn-col" id="addColBtn">➕ Columna</button>
+            <button class="btn-clear" id="clearBtn">🗑️ Limpiar</button>
+            <span class="badge" id="cellCount">0 celdas</span>
+        </div>
+
+        <div class="table-container">
+            <table id="resultTable">
+                <thead><tr><th>📝 Toca dos veces para editar</th></tr></thead>
+                <tbody><tr><td>Sube una captura para extraer la tabla</td></tr></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
