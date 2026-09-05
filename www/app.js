@@ -1,5 +1,5 @@
 // ============================================================
-//  LECTOR DE TABLAS - DETECCIÓN 100% OFFLINE CON CANVAS
+//  LECTOR DE TABLAS - DETECCIÓN MEJORADA
 // ============================================================
 
 let currentImageFile = null;
@@ -78,7 +78,7 @@ function handleFile(file) {
 async function initTesseract() {
     try {
         if (typeof Tesseract === 'undefined') {
-            throw new Error('Tesseract no está disponible. Conéctate a internet.');
+            throw new Error('Tesseract no está disponible.');
         }
 
         statusLoading.style.display = 'block';
@@ -127,100 +127,89 @@ async function initTesseract() {
 }
 
 // ============================================================
-//  DETECCIÓN DE LÍNEAS CON CANVAS API (100% OFFLINE)
+//  DETECCIÓN DE TABLAS MEJORADA
 // ============================================================
 
-function detectLines(imageData) {
+function detectTable(imageData) {
     const width = imageData.width;
     const height = imageData.height;
     const data = imageData.data;
     
-    // 1. Convertir a escala de grises
+    // Convertir a escala de grises
     const gray = new Uint8Array(width * height);
     for (let i = 0; i < data.length; i += 4) {
         const idx = i / 4;
         gray[idx] = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
     }
     
-    // 2. Umbral para detectar líneas oscuras
-    const threshold = 150;
-    const minLineLength = Math.min(width, height) * 0.5;
+    // Detectar líneas usando proyecciones
+    const horizontalProjection = new Float32Array(height);
+    const verticalProjection = new Float32Array(width);
     
-    // 3. Detectar líneas horizontales
-    const horizontalLines = [];
+    // Umbral adaptativo
+    const threshold = 180;
+    
+    // Proyección horizontal (suma de píxeles oscuros por fila)
     for (let y = 0; y < height; y++) {
-        let darkCount = 0;
-        let startX = -1;
-        let endX = -1;
-        
+        let sum = 0;
         for (let x = 0; x < width; x++) {
-            const idx = y * width + x;
-            if (gray[idx] < threshold) {
-                darkCount++;
-                if (startX === -1) startX = x;
-                endX = x;
-            }
+            if (gray[y * width + x] < threshold) sum++;
         }
-        
-        // Si la línea es lo suficientemente larga
-        if (darkCount > minLineLength) {
-            horizontalLines.push({
-                y: y,
-                x1: startX,
-                x2: endX,
-                length: darkCount
-            });
-        }
+        horizontalProjection[y] = sum / width;
     }
     
-    // 4. Detectar líneas verticales
-    const verticalLines = [];
+    // Proyección vertical (suma de píxeles oscuros por columna)
     for (let x = 0; x < width; x++) {
-        let darkCount = 0;
-        let startY = -1;
-        let endY = -1;
-        
+        let sum = 0;
         for (let y = 0; y < height; y++) {
-            const idx = y * width + x;
-            if (gray[idx] < threshold) {
-                darkCount++;
-                if (startY === -1) startY = y;
-                endY = y;
-            }
+            if (gray[y * width + x] < threshold) sum++;
         }
-        
-        if (darkCount > minLineLength) {
-            verticalLines.push({
-                x: x,
-                y1: startY,
-                y2: endY,
-                length: darkCount
-            });
-        }
+        verticalProjection[x] = sum / height;
     }
     
-    // 5. Filtrar líneas duplicadas (cercanas)
-    const filteredHorizontal = filterCloseLines(horizontalLines, 'y', 10);
-    const filteredVertical = filterCloseLines(verticalLines, 'x', 10);
+    // Encontrar líneas horizontales (filas de la tabla)
+    const horizontalLines = [];
+    const hThreshold = 0.3; // 30% de píxeles oscuros = línea
+    let inLine = false;
+    let lineStart = 0;
     
-    // 6. Encontrar intersecciones (ángulos de 90°)
-    const intersections = [];
-    for (const h of filteredHorizontal) {
-        for (const v of filteredVertical) {
-            // Verificar que se cruzan
-            if (v.x >= h.x1 && v.x <= h.x2 && h.y >= v.y1 && h.y <= v.y2) {
-                intersections.push({ x: v.x, y: h.y });
+    for (let y = 0; y < height; y++) {
+        if (horizontalProjection[y] > hThreshold && !inLine) {
+            inLine = true;
+            lineStart = y;
+        } else if (horizontalProjection[y] <= hThreshold && inLine) {
+            inLine = false;
+            if (y - lineStart > 5) { // Mínimo 5px de grosor
+                horizontalLines.push({ y: Math.round((lineStart + y) / 2) });
             }
         }
     }
     
-    console.log(`✅ Horizontales: ${filteredHorizontal.length}, Verticales: ${filteredVertical.length}, Intersecciones: ${intersections.length}`);
+    // Encontrar líneas verticales (columnas de la tabla)
+    const verticalLines = [];
+    const vThreshold = 0.25;
+    inLine = false;
+    lineStart = 0;
     
-    return {
-        horizontalLines: filteredHorizontal,
-        verticalLines: filteredVertical,
-        intersections: intersections
-    };
+    for (let x = 0; x < width; x++) {
+        if (verticalProjection[x] > vThreshold && !inLine) {
+            inLine = true;
+            lineStart = x;
+        } else if (verticalProjection[x] <= vThreshold && inLine) {
+            inLine = false;
+            if (x - lineStart > 3) {
+                verticalLines.push({ x: Math.round((lineStart + x) / 2) });
+            }
+        }
+    }
+    
+    // Filtrar líneas cercanas
+    const filteredH = filterCloseLines(horizontalLines, 'y', 15);
+    const filteredV = filterCloseLines(verticalLines, 'x', 15);
+    
+    console.log(`Líneas horizontales: ${filteredH.length}, Verticales: ${filteredV.length}`);
+    
+    return { horizontalLines: filteredH, verticalLines: filteredV };
 }
 
 function filterCloseLines(lines, axis, threshold) {
@@ -238,56 +227,15 @@ function filterCloseLines(lines, axis, threshold) {
 }
 
 // ============================================================
-//  DETECTAR CELDAS DESDE INTERSECCIONES
+//  EXTRAER CELDAS MEJORADO
 // ============================================================
 
-function detectCells(intersections) {
-    if (intersections.length < 4) {
-        return [];
+async function extractCells(imageData, horizontalLines, verticalLines) {
+    if (horizontalLines.length < 2 || verticalLines.length < 2) {
+        return null;
     }
     
-    // 1. Agrupar por Y (filas)
-    const rows = [];
-    let currentRow = [];
-    const thresholdY = 15;
-    
-    const sortedByY = [...intersections].sort((a, b) => a.y - b.y);
-    
-    for (const point of sortedByY) {
-        if (currentRow.length === 0 || 
-            Math.abs(point.y - currentRow[0].y) < thresholdY) {
-            currentRow.push(point);
-        } else {
-            if (currentRow.length > 0) {
-                rows.push(currentRow);
-            }
-            currentRow = [point];
-        }
-    }
-    if (currentRow.length > 0) rows.push(currentRow);
-    
-    // 2. Para cada fila, ordenar por X (columnas)
-    const tableCells = [];
-    for (const row of rows) {
-        const sortedByX = [...row].sort((a, b) => a.x - b.x);
-        tableCells.push(sortedByX);
-    }
-    
-    // 3. Verificar que hay al menos 2 filas y 2 columnas
-    if (tableCells.length < 2 || tableCells[0].length < 2) {
-        return [];
-    }
-    
-    console.log(`✅ Filas: ${tableCells.length}, Columnas: ${tableCells[0].length}`);
-    return tableCells;
-}
-
-// ============================================================
-//  EXTRAER CELDAS CON OCR
-// ============================================================
-
-async function extractCellsWithOCR(imageData, cells) {
-    // Dibujar imagen en canvas
+    // Crear canvas para recortar
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = imageData.width;
@@ -295,20 +243,25 @@ async function extractCellsWithOCR(imageData, cells) {
     ctx.putImageData(imageData, 0, 0);
     
     const tableData = [];
-    const padding = 5; // Espacio para evitar bordes
+    const padding = 3;
     
-    // Para cada celda (excepto la última fila y columna)
-    for (let row = 0; row < cells.length - 1; row++) {
+    // Ordenar líneas
+    const hLines = horizontalLines.map(l => l.y).sort((a, b) => a - b);
+    const vLines = verticalLines.map(l => l.x).sort((a, b) => a - b);
+    
+    // Para cada celda
+    for (let row = 0; row < hLines.length - 1; row++) {
         const rowData = [];
-        for (let col = 0; col < cells[row].length - 1; col++) {
-            // Definir área de la celda
-            const x1 = cells[row][col].x + padding;
-            const y1 = cells[row][col].y + padding;
-            const x2 = cells[row][col + 1].x - padding;
-            const y2 = cells[row + 1][col].y - padding;
+        const y1 = hLines[row] + padding;
+        const y2 = hLines[row + 1] - padding;
+        
+        if (y2 <= y1) continue;
+        
+        for (let col = 0; col < vLines.length - 1; col++) {
+            const x1 = vLines[col] + padding;
+            const x2 = vLines[col + 1] - padding;
             
-            // Validar que la celda tiene tamaño
-            if (x2 <= x1 || y2 <= y1) {
+            if (x2 <= x1) {
                 rowData.push('');
                 continue;
             }
@@ -322,15 +275,15 @@ async function extractCellsWithOCR(imageData, cells) {
             
             // OCR en la celda
             try {
-                const cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
-                const text = await recognizeCell(cellImageData);
+                const text = await recognizeCell(cellCanvas);
                 rowData.push(text);
             } catch (e) {
                 console.warn('Error en celda:', e);
                 rowData.push('');
             }
         }
-        if (rowData.length > 0) {
+        
+        if (rowData.length > 0 && rowData.some(cell => cell.length > 0)) {
             tableData.push(rowData);
         }
     }
@@ -338,18 +291,26 @@ async function extractCellsWithOCR(imageData, cells) {
     return tableData;
 }
 
-async function recognizeCell(imageData) {
-    // Convertir a imagen para Tesseract
-    const canvas = document.createElement('canvas');
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-    const ctx = canvas.getContext('2d');
-    ctx.putImageData(imageData, 0, 0);
-    
-    // Si la celda es muy pequeña, no procesar
+async function recognizeCell(canvas) {
+    // Si la celda es muy pequeña
     if (canvas.width < 10 || canvas.height < 10) {
         return '';
     }
+    
+    // Mejorar contraste
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Aumentar contraste
+    for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        const enhanced = gray < 128 ? 0 : 255;
+        data[i] = enhanced;
+        data[i+1] = enhanced;
+        data[i+2] = enhanced;
+    }
+    ctx.putImageData(imageData, 0, 0);
     
     const imageUrl = canvas.toDataURL('image/png');
     
@@ -386,33 +347,51 @@ async function processImage() {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
 
-        // 1. Obtener ImageData
+        // Obtener ImageData
         const img = new Image();
         img.src = await fileToBase64(currentImageFile);
         await img.decode();
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Redimensionar si es muy grande
+        let width = img.width;
+        let height = img.height;
+        const maxSize = 2000;
+        
+        if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
 
         showProgress(true, 25);
         setStatus('📐 Detectando líneas...', 'info');
 
-        // 2. Detectar líneas
-        const { horizontalLines, verticalLines, intersections } = detectLines(imageData);
+        // Detectar líneas
+        const { horizontalLines, verticalLines } = detectTable(imageData);
         
-        if (intersections.length < 4) {
+        if (horizontalLines.length < 2 || verticalLines.length < 2) {
             // No hay tabla detectable, usar OCR normal
             showProgress(true, 50);
             setStatus('📄 No se detectó tabla. Usando OCR general...', 'warning');
             
-            const { data: { text } } = await worker.recognize(imageData);
+            // Mejorar imagen para OCR
+            const enhancedCanvas = document.createElement('canvas');
+            enhancedCanvas.width = width;
+            enhancedCanvas.height = height;
+            const eCtx = enhancedCanvas.getContext('2d');
+            eCtx.putImageData(imageData, 0, 0);
+            
+            const { data: { text } } = await worker.recognize(enhancedCanvas);
             showOcrResult(text);
             
-            // Mostrar texto como tabla simple
             const lines = text.split('\n').filter(l => l.trim());
             if (lines.length > 0) {
                 tableData = [['Texto extraído'], ...lines.map(l => [l])];
@@ -427,28 +406,14 @@ async function processImage() {
         }
 
         showProgress(true, 50);
-        setStatus('📊 Identificando celdas...', 'info');
+        setStatus('📊 Extrayendo celdas...', 'info');
 
-        // 3. Detectar celdas
-        const cells = detectCells(intersections);
-        
-        if (cells.length < 2) {
-            setStatus('⚠️ No se pudo identificar la tabla.', 'warning');
-            showProgress(true, 100);
-            setTimeout(() => showProgress(false), 1000);
-            return;
-        }
-
-        showProgress(true, 65);
-        setStatus('🔍 Leyendo cada celda...', 'info');
-
-        // 4. Extraer cada celda con OCR
-        const tableDataResult = await extractCellsWithOCR(imageData, cells);
+        // Extraer celdas
+        const tableDataResult = await extractCells(imageData, horizontalLines, verticalLines);
         
         showProgress(true, 90);
         setStatus('📋 Reconstruyendo tabla...', 'info');
 
-        // 5. Mostrar tabla
         if (tableDataResult && tableDataResult.length > 0) {
             // Limpiar filas vacías
             const cleanData = tableDataResult.filter(row => row.some(cell => cell.length > 0));
@@ -478,7 +443,7 @@ async function processImage() {
 }
 
 // ============================================================
-//  RENDERIZAR TABLA (CON EDITOR DE CELDAS)
+//  RENDERIZAR TABLA
 // ============================================================
 
 function renderTable(data) {
@@ -670,5 +635,5 @@ setTimeout(async () => {
     await initTesseract();
 }, 1000);
 
-console.log('📊 Lector de Tablas - Detección con Canvas API');
+console.log('📊 Lector de Tablas - Detección mejorada');
 console.log('📐 100% OFFLINE - Sin servidores');
