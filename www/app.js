@@ -1,6 +1,6 @@
 // ============================================================
-//  LECTOR DE TABLAS - 4 MÉTODOS DE DETECCIÓN
-//  Líneas | Texto | Híbrido | ML (Simulado)
+//  LECTOR DE TABLAS - 5 MÉTODOS DE DETECCIÓN
+//  Líneas | Texto | Híbrido | ML | Contornos (NUEVO)
 // ============================================================
 
 let currentImageFile = null;
@@ -8,7 +8,7 @@ let tableData = [];
 let worker = null;
 let isProcessing = false;
 let tesseractReady = false;
-let currentMethod = 'hybrid';
+let currentMethod = 'contours';
 let imageDataCache = null;
 
 // ===== DOM REFERENCIAS =====
@@ -34,6 +34,7 @@ const methodLines = document.getElementById('methodLines');
 const methodText = document.getElementById('methodText');
 const methodHybrid = document.getElementById('methodHybrid');
 const methodML = document.getElementById('methodML');
+const methodContours = document.getElementById('methodContours');
 const clearMethodsBtn = document.getElementById('clearMethodsBtn');
 
 // Estadísticas
@@ -41,12 +42,14 @@ const statLines = document.getElementById('statLines');
 const statText = document.getElementById('statText');
 const statHybrid = document.getElementById('statHybrid');
 const statML = document.getElementById('statML');
+const statContours = document.getElementById('statContours');
 
 const badges = {
     lines: document.getElementById('badgeLines'),
     text: document.getElementById('badgeText'),
     hybrid: document.getElementById('badgeHybrid'),
-    ml: document.getElementById('badgeML')
+    ml: document.getElementById('badgeML'),
+    contours: document.getElementById('badgeContours')
 };
 
 // ===== RESULTADOS DE CADA MÉTODO =====
@@ -54,7 +57,8 @@ let results = {
     lines: null,
     text: null,
     hybrid: null,
-    ml: null
+    ml: null,
+    contours: null
 };
 
 function setStatus(msg, type = 'info') {
@@ -98,7 +102,7 @@ function handleFile(file) {
         previewImage.style.display = 'block';
         processBtn.disabled = false;
         // Habilitar botones de métodos
-        [methodLines, methodText, methodHybrid, methodML].forEach(b => b.disabled = false);
+        [methodLines, methodText, methodHybrid, methodML, methodContours].forEach(b => b.disabled = false);
         setStatus('📸 Imagen cargada. Elige un método y toca "Extraer".', 'info');
     };
     reader.readAsDataURL(file);
@@ -532,23 +536,18 @@ function detectTableHybridCombine(lineResult, textBlocks, width, height) {
 // ============================================================
 
 function detectTableML(imageData) {
-    // Este método simula un modelo de ML con parámetros ajustables
-    // En una implementación real, aquí cargarías un modelo ONNX o TensorFlow Lite
-    
     const width = imageData.width;
     const height = imageData.height;
     const { binary } = preprocessImage(imageData);
     
-    // Parámetros "aprendidos" (simulan un modelo entrenado)
     const mlParams = {
-        lineThreshold: 12,        // Más sensible que el método líneas
-        minLineLength: 0.15,      // Detecta líneas más cortas
-        filterThreshold: 8,       // Más preciso
-        confidenceThreshold: 0.7, // Filtra líneas con baja confianza
-        adaptiveThreshold: true   // Usa umbral adaptativo
+        lineThreshold: 12,
+        minLineLength: 0.15,
+        filterThreshold: 8,
+        confidenceThreshold: 0.7,
+        adaptiveThreshold: true
     };
     
-    // Simular "aprendizaje" de la imagen
     const avgDarkness = calculateAverageDarkness(binary, width, height);
     const adjustedThreshold = mlParams.adaptiveThreshold ? 
         Math.max(8, mlParams.lineThreshold - (avgDarkness * 0.3)) : 
@@ -556,7 +555,6 @@ function detectTableML(imageData) {
     
     const minLineLength = Math.min(width, height) * mlParams.minLineLength;
     
-    // Detectar líneas con parámetros ajustados
     const horizontalLines = [];
     for (let y = 0; y < height; y++) {
         let darkCount = 0;
@@ -573,7 +571,6 @@ function detectTableML(imageData) {
         }
         
         const percentage = (darkCount / width) * 100;
-        // Confianza basada en densidad de píxeles
         const confidence = Math.min(1, percentage / 30);
         if (percentage > adjustedThreshold && darkCount > minLineLength && confidence > mlParams.confidenceThreshold) {
             horizontalLines.push({ y, x1: startX, x2: endX, length: darkCount, confidence });
@@ -602,11 +599,9 @@ function detectTableML(imageData) {
         }
     }
     
-    // Filtrar con umbral más preciso
     const filteredH = filterCloseLines(horizontalLines, 'y', mlParams.filterThreshold);
     const filteredV = filterCloseLines(verticalLines, 'x', mlParams.filterThreshold);
     
-    // Generar intersecciones con ponderación de confianza
     const intersections = [];
     for (const h of filteredH) {
         for (const v of filteredV) {
@@ -615,19 +610,14 @@ function detectTableML(imageData) {
             const withinH = (x >= h.x1 && x <= h.x2);
             const withinV = (y >= v.y1 && y <= v.y2);
             if (withinH && withinV) {
-                // Ponderación por confianza combinada
                 const combinedConfidence = (h.confidence + v.confidence) / 2;
                 intersections.push({ x, y, confidence: combinedConfidence });
             }
         }
     }
     
-    // Ordenar por confianza y mantener las mejores
     intersections.sort((a, b) => b.confidence - a.confidence);
     const topIntersections = intersections.slice(0, Math.min(intersections.length, 200));
-    
-    console.log(`🧠 ML detectado: ${filteredH.length}H, ${filteredV.length}V, ${topIntersections.length} intersecciones`);
-    console.log(`🧠 Confianza promedio: ${(topIntersections.reduce((s, i) => s + i.confidence, 0) / topIntersections.length * 100).toFixed(1)}%`);
     
     return {
         horizontalLines: filteredH,
@@ -642,6 +632,225 @@ function calculateAverageDarkness(binary, width, height) {
         if (binary[i] === 0) darkCount++;
     }
     return darkCount / (width * height);
+}
+
+// ============================================================
+//  MÉTODO 5: CONTORNOS (EL NUEVO MÉTODO PROFESIONAL)
+// ============================================================
+
+function detectTableByContours(imageData) {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+    
+    // 1. Preprocesamiento: Umbral adaptativo
+    const binary = new Uint8Array(width * height);
+    for (let i = 0; i < data.length; i += 4) {
+        const idx = i / 4;
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        // Umbral adaptativo: usar la media local
+        binary[idx] = gray < 128 ? 0 : 255;
+    }
+    
+    // 2. Encontrar contornos (regiones de texto)
+    const contours = findContours(binary, width, height);
+    
+    // 3. Filtrar contornos pequeños (ruido)
+    const minArea = (width * height) * 0.001; // 0.1% del área total
+    const filteredContours = contours.filter(c => c.area > minArea);
+    
+    // 4. Agrupar contornos por proximidad (clustering)
+    const groups = clusterContours(filteredContours, width, height);
+    
+    // 5. Crear líneas de grid desde los grupos
+    const gridLines = createGridFromGroups(groups, width, height);
+    
+    console.log(`🔲 Contornos encontrados: ${contours.length}`);
+    console.log(`🔲 Contornos filtrados: ${filteredContours.length}`);
+    console.log(`🔲 Grupos de contornos: ${groups.length}`);
+    console.log(`🔲 Líneas de grid: H=${gridLines.horizontalLines.length}, V=${gridLines.verticalLines.length}`);
+    
+    return gridLines;
+}
+
+function findContours(binary, width, height) {
+    const visited = new Uint8Array(width * height);
+    const contours = [];
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (binary[idx] === 0 && !visited[idx]) {
+                // Encontrar contorno completo
+                const contour = extractContour(binary, visited, width, height, x, y);
+                if (contour.length > 10) {
+                    // Calcular bounding box y centroide
+                    let minX = Infinity, maxX = -Infinity;
+                    let minY = Infinity, maxY = -Infinity;
+                    let sumX = 0, sumY = 0;
+                    
+                    for (const [px, py] of contour) {
+                        minX = Math.min(minX, px);
+                        maxX = Math.max(maxX, px);
+                        minY = Math.min(minY, py);
+                        maxY = Math.max(maxY, py);
+                        sumX += px;
+                        sumY += py;
+                    }
+                    
+                    contours.push({
+                        x: minX,
+                        y: minY,
+                        width: maxX - minX,
+                        height: maxY - minY,
+                        centerX: sumX / contour.length,
+                        centerY: sumY / contour.length,
+                        area: contour.length,
+                        points: contour
+                    });
+                }
+            }
+        }
+    }
+    
+    return contours;
+}
+
+function extractContour(binary, visited, width, height, startX, startY) {
+    const queue = [[startX, startY]];
+    const contour = [];
+    const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    
+    while (queue.length > 0) {
+        const [x, y] = queue.shift();
+        const idx = y * width + x;
+        
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        if (visited[idx]) continue;
+        if (binary[idx] !== 0) continue;
+        
+        visited[idx] = 1;
+        contour.push([x, y]);
+        
+        for (const [dx, dy] of dirs) {
+            queue.push([x + dx, y + dy]);
+        }
+    }
+    
+    return contour;
+}
+
+function clusterContours(contours, width, height) {
+    if (contours.length === 0) return [];
+    
+    const groups = [];
+    const thresholdX = width * 0.02; // 2% del ancho
+    const thresholdY = height * 0.02; // 2% del alto
+    
+    for (const contour of contours) {
+        let added = false;
+        for (const group of groups) {
+            // Verificar si el contorno está cerca del grupo
+            const avgX = group.reduce((s, c) => s + c.centerX, 0) / group.length;
+            const avgY = group.reduce((s, c) => s + c.centerY, 0) / group.length;
+            
+            if (Math.abs(contour.centerX - avgX) < thresholdX &&
+                Math.abs(contour.centerY - avgY) < thresholdY) {
+                group.push(contour);
+                added = true;
+                break;
+            }
+        }
+        if (!added) {
+            groups.push([contour]);
+        }
+    }
+    
+    return groups;
+}
+
+function createGridFromGroups(groups, width, height) {
+    if (groups.length < 2) {
+        return { horizontalLines: [], verticalLines: [], intersections: [] };
+    }
+    
+    // Calcular centroides de grupos
+    const centroids = groups.map(group => {
+        const sumX = group.reduce((s, c) => s + c.centerX, 0);
+        const sumY = group.reduce((s, c) => s + c.centerY, 0);
+        return {
+            x: sumX / group.length,
+            y: sumY / group.length,
+            group: group
+        };
+    });
+    
+    // Ordenar por Y (filas)
+    const sortedByY = [...centroids].sort((a, b) => a.y - b.y);
+    
+    // Agrupar por filas
+    const rows = [];
+    let currentRow = [];
+    const thresholdY = height * 0.03;
+    
+    for (const c of sortedByY) {
+        if (currentRow.length === 0 || 
+            Math.abs(c.y - currentRow[0].y) < thresholdY) {
+            currentRow.push(c);
+        } else {
+            if (currentRow.length > 1) {
+                rows.push(currentRow);
+            }
+            currentRow = [c];
+        }
+    }
+    if (currentRow.length > 1) rows.push(currentRow);
+    
+    // Para cada fila, ordenar por X (columnas)
+    const tableRows = rows.map(row => 
+        [...row].sort((a, b) => a.x - b.x)
+    );
+    
+    // Generar líneas horizontales (entre filas)
+    const horizontalLines = [];
+    for (let i = 0; i < tableRows.length - 1; i++) {
+        const row1 = tableRows[i];
+        const row2 = tableRows[i + 1];
+        const y = Math.round((row1[0].y + row2[0].y) / 2);
+        horizontalLines.push({ y, x1: 0, x2: width });
+    }
+    
+    // Generar líneas verticales (entre columnas)
+    const verticalLines = [];
+    const numCols = Math.min(...tableRows.map(row => row.length));
+    for (let col = 0; col < numCols - 1; col++) {
+        let x = 0;
+        let count = 0;
+        for (const row of tableRows) {
+            if (row.length > col + 1) {
+                x += (row[col].x + row[col + 1].x) / 2;
+                count++;
+            }
+        }
+        if (count > 0) {
+            x = Math.round(x / count);
+            verticalLines.push({ x, y1: 0, y2: height });
+        }
+    }
+    
+    // Generar intersecciones
+    const intersections = [];
+    for (const h of horizontalLines) {
+        for (const v of verticalLines) {
+            intersections.push({ x: v.x, y: h.y });
+        }
+    }
+    
+    return {
+        horizontalLines: horizontalLines,
+        verticalLines: verticalLines,
+        intersections: intersections
+    };
 }
 
 // ============================================================
@@ -817,8 +1026,12 @@ async function processWithMethod(method, imageData) {
             methodName = 'ML';
             result = detectTableML(imageData);
             break;
+        case 'contours':
+            methodName = 'Contornos';
+            result = detectTableByContours(imageData);
+            break;
         default:
-            result = detectTableHybrid(imageData);
+            result = detectTableByContours(imageData);
     }
     
     console.log(`📊 Método ${methodName}: ${result.intersections.length} intersecciones`);
@@ -874,11 +1087,11 @@ async function processImage() {
         imageDataCache = imageData;
 
         // Procesar con todos los métodos
-        showProgress(true, 30);
-        setStatus('🧪 Probando 4 métodos de detección...', 'info');
+        showProgress(true, 20);
+        setStatus('🧪 Probando 5 métodos de detección...', 'info');
 
-        const methods = ['lines', 'text', 'hybrid', 'ml'];
-        const methodNames = ['Líneas', 'Texto', 'Híbrido', 'ML'];
+        const methods = ['lines', 'text', 'hybrid', 'ml', 'contours'];
+        const methodNames = ['Líneas', 'Texto', 'Híbrido', 'ML', 'Contornos'];
         const resultsMap = {};
 
         for (let i = 0; i < methods.length; i++) {
@@ -899,7 +1112,13 @@ async function processImage() {
                 }
                 
                 // Actualizar estadísticas
-                const statMap = { lines: statLines, text: statText, hybrid: statHybrid, ml: statML };
+                const statMap = { 
+                    lines: statLines, 
+                    text: statText, 
+                    hybrid: statHybrid, 
+                    ml: statML,
+                    contours: statContours
+                };
                 if (statMap[m]) {
                     statMap[m].textContent = count > 0 ? count : '✗';
                     statMap[m].parentElement.style.borderColor = count > 4 ? '#2ECC71' : '#ff6b6b';
@@ -917,11 +1136,11 @@ async function processImage() {
                 }
             }
             
-            showProgress(true, 30 + (i * 15));
+            showProgress(true, 20 + (i * 12));
         }
 
-        // Seleccionar el mejor método (el que tenga más intersecciones)
-        let bestMethod = 'hybrid';
+        // Seleccionar el mejor método
+        let bestMethod = 'contours';
         let bestCount = 0;
         for (const m of methods) {
             if (resultsMap[m] && resultsMap[m].intersections.length > bestCount) {
@@ -930,7 +1149,7 @@ async function processImage() {
             }
         }
 
-        showProgress(true, 90);
+        showProgress(true, 85);
         setStatus(`✅ Mejor método: ${bestMethod.toUpperCase()} (${bestCount} intersecciones)`, 'success');
 
         // Usar el mejor método
@@ -1005,7 +1224,13 @@ async function processWithSpecificMethod(method) {
     isProcessing = true;
 
     // Activar botón visualmente
-    const btnMap = { lines: methodLines, text: methodText, hybrid: methodHybrid, ml: methodML };
+    const btnMap = { 
+        lines: methodLines, 
+        text: methodText, 
+        hybrid: methodHybrid, 
+        ml: methodML,
+        contours: methodContours
+    };
     Object.keys(btnMap).forEach(key => btnMap[key].classList.remove('active'));
     if (btnMap[method]) btnMap[method].classList.add('active');
 
@@ -1167,7 +1392,7 @@ function clearTable() {
         downloadBtn.disabled = true;
         copyBtn.disabled = true;
         // Limpiar estadísticas
-        ['lines', 'text', 'hybrid', 'ml'].forEach(m => {
+        ['lines', 'text', 'hybrid', 'ml', 'contours'].forEach(m => {
             badges[m].textContent = '-';
             badges[m].style.background = '#95A5A6';
         });
@@ -1176,10 +1401,16 @@ function clearTable() {
 }
 
 function clearMethodsStats() {
-    ['lines', 'text', 'hybrid', 'ml'].forEach(m => {
+    ['lines', 'text', 'hybrid', 'ml', 'contours'].forEach(m => {
         badges[m].textContent = '-';
         badges[m].style.background = '#95A5A6';
-        const statMap = { lines: statLines, text: statText, hybrid: statHybrid, ml: statML };
+        const statMap = { 
+            lines: statLines, 
+            text: statText, 
+            hybrid: statHybrid, 
+            ml: statML,
+            contours: statContours
+        };
         if (statMap[m]) {
             statMap[m].textContent = '-';
             statMap[m].parentElement.style.borderColor = '#25D366';
@@ -1288,7 +1519,8 @@ const btnMap = {
     lines: methodLines,
     text: methodText,
     hybrid: methodHybrid,
-    ml: methodML
+    ml: methodML,
+    contours: methodContours
 };
 
 Object.keys(btnMap).forEach(method => {
@@ -1314,7 +1546,7 @@ setTimeout(async () => {
     await initTesseract();
 }, 1000);
 
-console.log('📊 Lector de Tablas - 4 Métodos de Detección');
-console.log('📐 Líneas | Texto | Híbrido | ML (Simulado)');
+console.log('📊 Lector de Tablas - 5 Métodos de Detección');
+console.log('📐 Líneas | Texto | Híbrido | ML | Contornos (NUEVO)');
 console.log('💾 Caché de OCR activado');
 console.log('🔄 Doble toque en el título para limpiar caché');
