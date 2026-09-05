@@ -3,7 +3,7 @@
 //  NO descarga modelos cada vez - Funciona offline
 // ============================================================
 
-import { Ocr, OcrOptions } from '@capacitor-mlkit/ocr';
+const { Ocr } = Capacitor.Plugins;
 
 let currentImageFile = null;
 let tableData = [];
@@ -84,7 +84,7 @@ function setModo(modo) {
 }
 
 // ============================================================
-//  MANEJO DE IMÁGENES (CORREGIDO)
+//  MANEJO DE IMÁGENES
 // ============================================================
 
 async function handleFile(file) {
@@ -118,7 +118,7 @@ async function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR ML KIT OCR (NATIVO - SIN DESCARGAS)
+//  INICIALIZAR ML KIT OCR
 // ============================================================
 
 async function initOCR() {
@@ -152,7 +152,7 @@ async function initOCR() {
 }
 
 // ============================================================
-//  OCR CON ML KIT (NATIVO) - CORREGIDO
+//  OCR CON ML KIT
 // ============================================================
 
 async function reconocerTexto(imageData) {
