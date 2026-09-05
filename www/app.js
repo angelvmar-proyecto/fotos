@@ -1,5 +1,5 @@
-/// ============================================================
-//  LECTOR DE TABLAS - 3 MODOS DE EXTRACCIÓN
+// ============================================================
+//  LECTOR DE TABLAS - 3 MODOS DE EXTRACCIÓN CON LOGS
 // ============================================================
 
 let currentImageFile = null;
@@ -7,7 +7,7 @@ let tableData = [];
 let worker = null;
 let isProcessing = false;
 let tesseractReady = false;
-let modoActual = 'lineas'; // 'lineas' | 'espacios' | 'patron'
+let modoActual = 'lineas';
 
 // ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
@@ -64,22 +64,22 @@ function showOcrResult(text) {
 
 function setModo(modo) {
     modoActual = modo;
-    const nombres = {
+    var nombres = {
         'lineas': '🔍 Líneas (bordes)',
         'espacios': '📊 Espacios (alineación)',
         'patron': '📋 Patrón (formato específico)'
     };
-    modoActualLabel.textContent = 'Modo: ' + nombres[modo];
+    if (modoActualLabel) modoActualLabel.textContent = 'Modo: ' + nombres[modo];
     
-    // Resetear botones
-    [modoLineasBtn, modoEspaciosBtn, modoPatronBtn].forEach(b => b.classList.remove('active'));
+    if (modoLineasBtn) modoLineasBtn.classList.remove('active');
+    if (modoEspaciosBtn) modoEspaciosBtn.classList.remove('active');
+    if (modoPatronBtn) modoPatronBtn.classList.remove('active');
     
-    // Activar el seleccionado
-    if (modo === 'lineas') modoLineasBtn.classList.add('active');
-    else if (modo === 'espacios') modoEspaciosBtn.classList.add('active');
-    else if (modo === 'patron') modoPatronBtn.classList.add('active');
+    if (modo === 'lineas' && modoLineasBtn) modoLineasBtn.classList.add('active');
+    else if (modo === 'espacios' && modoEspaciosBtn) modoEspaciosBtn.classList.add('active');
+    else if (modo === 'patron' && modoPatronBtn) modoPatronBtn.classList.add('active');
     
-    setStatus('📸 Modo ' + nombres[modo] + ' seleccionado. Sube una imagen.', 'info');
+    setStatus('📸 Modo ' + nombres[modo] + ' seleccionado.', 'info');
 }
 
 // ============================================================
@@ -88,6 +88,7 @@ function setModo(modo) {
 
 async function handleFile(file) {
     console.log("📂 Archivo seleccionado:", file.name, "Tamaño:", file.size);
+    console.log("📂 Tipo de archivo:", file.type);
 
     if (!file || !file.type.startsWith('image/')) {
         setStatus('⚠️ Sube una imagen válida (JPG, PNG, WEBP)', 'error');
@@ -97,21 +98,22 @@ async function handleFile(file) {
     try {
         const reader = new FileReader();
         reader.onload = function(e) {
-            console.log("✅ Imagen convertida a base64 correctamente");
+            console.log("✅ Imagen convertida a base64. Longitud:", e.target.result.length);
+            console.log("✅ Primeros 100 caracteres:", e.target.result.substring(0, 100));
             previewImage.src = e.target.result;
             previewImage.style.display = 'block';
             currentImageFile = e.target.result;
             processBtn.disabled = false;
-            setStatus('📸 Imagen cargada. Selecciona un modo y toca "Extraer".', 'info');
+            setStatus('📸 Imagen cargada. (' + file.name + ')', 'info');
         };
         reader.onerror = function(e) {
             console.error("❌ Error al leer la imagen:", e);
-            setStatus('❌ Error al leer el archivo. Intenta con otra imagen.', 'error');
+            setStatus('❌ Error al leer el archivo', 'error');
         };
         reader.readAsDataURL(file);
     } catch (error) {
         console.error("❌ Error en handleFile:", error);
-        setStatus('❌ Error al leer el archivo: ' + error.message, 'error');
+        setStatus('❌ Error: ' + error.message, 'error');
     }
 }
 
@@ -177,7 +179,7 @@ async function initTesseract() {
 }
 
 // ============================================================
-//  MODO 1: DETECCIÓN POR LÍNEAS (ángulos de 90°)
+//  DETECCIÓN DE LÍNEAS (MODO 1)
 // ============================================================
 
 function detectLines(imageData) {
@@ -309,7 +311,6 @@ async function extraerPorLineas(imageData) {
         return null;
     }
     
-    // Extraer cada celda con OCR
     var canvas = document.createElement('canvas');
     var ctx = canvas.getContext('2d');
     canvas.width = imageData.width;
@@ -356,7 +357,7 @@ async function extraerPorLineas(imageData) {
 }
 
 // ============================================================
-//  MODO 2: DETECCIÓN POR ESPACIOS (sin líneas)
+//  MODO 2: DETECCIÓN POR ESPACIOS
 // ============================================================
 
 function detectTableBySpacing(text) {
@@ -457,13 +458,12 @@ function extractColumns(line, columnPositions) {
 }
 
 // ============================================================
-//  MODO 3: PARSEO POR PATRÓN (formato específico)
+//  MODO 3: PARSEO POR PATRÓN
 // ============================================================
 
 function parsearPorPatron(texto) {
     console.log("📋 Parseando por patrón...");
     
-    // Dividir por números seguidos de "INT"
     var registros = [];
     var partes = texto.split(/(\d+)\s+INT\s+/);
     
@@ -489,13 +489,11 @@ function parsearPorPatron(texto) {
     
     console.log("✅ Encontrados " + registros.length + " registros");
     
-    // Extraer campos de cada registro
     var resultados = [];
     for (var r = 0; r < registros.length; r++) {
         var reg = registros[r];
         var contenido = reg.contenido;
         
-        // Extraer campos con regex
         var codigoMatch = contenido.match(/(PREMIER\s+T\w+)/);
         var nombreMatch = contenido.match(/([A-Z]+\s+[A-Z]+[A-Z\s]*)/);
         var hotelMatch = contenido.match(/([A-Z]+\s*-\s*[A-Z]+\s+[A-Z]+)/);
@@ -522,7 +520,6 @@ function parsearPorPatron(texto) {
         resultados.push(fila);
     }
     
-    // Agregar encabezados
     var encabezados = [
         'Número', 'Código', 'Nombre', 'Hotel', 'Hora', 
         'Fecha', 'Monto (USD)', 'Destino', 'Estado', 'Observación'
@@ -532,7 +529,7 @@ function parsearPorPatron(texto) {
 }
 
 // ============================================================
-//  EXTRAER CELDA CON OCR (para modo líneas)
+//  RECONOCER CELDA (para modo líneas)
 // ============================================================
 
 async function recognizeCell(imageData) {
@@ -579,19 +576,31 @@ function mostrarTextoComoTabla(text) {
 }
 
 // ============================================================
-//  PROCESAR IMAGEN - CON 3 MODOS
+//  PROCESAR IMAGEN - CON LOGS Y 3 MODOS
 // ============================================================
 
 async function processImage() {
+    console.log("🚀 ===== INICIANDO processImage =====");
+    console.log("📸 currentImageFile:", currentImageFile ? "SÍ (" + currentImageFile.length + " caracteres)" : "NO");
+    console.log("🧠 tesseractReady:", tesseractReady);
+    console.log("📋 modoActual:", modoActual);
+
     if (!currentImageFile) {
         setStatus('⚠️ Primero sube una imagen', 'error');
+        console.error("❌ No hay imagen cargada");
         return;
     }
 
     if (!tesseractReady) {
+        console.log("⏳ Tesseract no listo. Inicializando...");
         setStatus('⏳ Cargando OCR...', 'warning');
         var ready = await initTesseract();
-        if (!ready) return;
+        if (!ready) {
+            console.error("❌ No se pudo inicializar Tesseract");
+            setStatus('❌ No se pudo cargar OCR', 'error');
+            return;
+        }
+        console.log("✅ Tesseract inicializado correctamente");
     }
 
     if (isProcessing) return;
@@ -603,30 +612,79 @@ async function processImage() {
 
     try {
         showProgress(true, 5);
-        setStatus('🔍 Procesando imagen... (Modo: ' + modoActual + ')', 'info');
+        setStatus('🔍 Procesando imagen...', 'info');
 
+        // ===== CARGAR IMAGEN EN CANVAS =====
+        console.log("🖼️ Cargando imagen desde base64...");
         var img = new Image();
         img.src = currentImageFile;
-        await img.decode();
+        
+        await new Promise(function(resolve, reject) {
+            img.onload = function() {
+                console.log("✅ Imagen cargada. Dimensiones:", img.width, "x", img.height);
+                resolve();
+            };
+            img.onerror = function(e) {
+                console.error("❌ Error al cargar imagen:", e);
+                reject(e);
+            };
+        });
 
+        console.log("🔄 Dibujando en canvas...");
         var canvas = document.createElement('canvas');
         var ctx = canvas.getContext('2d');
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        console.log("✅ Canvas listo. ImageData:", imageData.width, "x", imageData.height);
 
-        // ===== MODO 1: LÍNEAS =====
-        if (modoActual === 'lineas') {
-            showProgress(true, 25);
-            setStatus('📐 Detectando líneas y ángulos de 90°...', 'info');
+        // ===== INTENTAR OCR =====
+        console.log("📸 Enviando imagen a Tesseract...");
+        showProgress(true, 30);
+        setStatus('📸 Aplicando OCR...', 'info');
+
+        try {
+            var result = await worker.recognize(imageData);
+            text = result.data.text || '';
+            console.log("✅ OCR completado");
+            console.log("📄 Texto OCR (primeros 100 caracteres):", text.substring(0, 100));
+            console.log("📄 Longitud del texto:", text.length);
             
+            if (text && text.length > 0) {
+                showOcrResult(text);
+                setStatus('📄 Texto extraído (' + text.length + ' caracteres)', 'success');
+            } else {
+                console.warn("⚠️ El OCR devolvió texto vacío");
+                setStatus('⚠️ El OCR no detectó texto. ¿La imagen tiene texto claro y legible?', 'warning');
+                showProgress(true, 100);
+                isProcessing = false;
+                processBtn.disabled = false;
+                setTimeout(function() { showProgress(false); }, 1500);
+                return;
+            }
+        } catch (e) {
+            console.error("❌ Error en OCR:", e);
+            setStatus('❌ Error en OCR: ' + (e.message || 'desconocido'), 'error');
+            showProgress(true, 100);
+            isProcessing = false;
+            processBtn.disabled = false;
+            setTimeout(function() { showProgress(false); }, 1500);
+            return;
+        }
+
+        // ===== CONTINUAR CON EXTRACCIÓN =====
+        console.log("📊 Continuando con extracción...");
+        showProgress(true, 50);
+
+        // Modo 1: Líneas
+        if (modoActual === 'lineas') {
             try {
                 tableDataResult = await extraerPorLineas(imageData);
                 if (tableDataResult && tableDataResult.length > 0) {
                     setStatus('✅ Tabla extraída por líneas (' + tableDataResult.length + ' filas)', 'success');
                 } else {
-                    setStatus('⚠️ No se detectaron líneas. Probá otro modo.', 'warning');
+                    console.log("⚠️ Modo líneas: no se detectaron líneas");
                 }
             } catch (e) {
                 console.warn('⚠️ Error en modo líneas:', e);
@@ -634,78 +692,53 @@ async function processImage() {
             }
         }
 
-        // ===== MODO 2: ESPACIOS =====
-        if (!tableDataResult || tableDataResult.length === 0) {
-            if (modoActual === 'espacios' || modoActual === 'lineas') {
-                showProgress(true, 50);
-                setStatus('📊 Extrayendo texto y detectando espacios...', 'info');
-                
-                try {
-                    var result = await worker.recognize(imageData);
-                    text = result.data.text || '';
-                    showOcrResult(text);
-                    
-                    if (text && text.length > 0) {
-                        var parsed = detectTableBySpacing(text);
-                        if (parsed && parsed.length > 1) {
-                            tableDataResult = parsed;
-                            setStatus('✅ Tabla detectada por espacios (' + tableDataResult.length + ' filas)', 'success');
-                        } else {
-                            setStatus('⚠️ No se detectaron columnas por espacios.', 'warning');
-                        }
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Error en modo espacios:', e);
-                    tableDataResult = null;
+        // Modo 2: Espacios
+        if (modoActual === 'espacios' && (!tableDataResult || tableDataResult.length === 0)) {
+            try {
+                var parsed = detectTableBySpacing(text);
+                if (parsed && parsed.length > 1) {
+                    tableDataResult = parsed;
+                    setStatus('✅ Tabla detectada por espacios (' + tableDataResult.length + ' filas)', 'success');
+                } else {
+                    console.log("⚠️ Modo espacios: no se detectaron columnas");
                 }
+            } catch (e) {
+                console.warn('⚠️ Error en modo espacios:', e);
+                tableDataResult = null;
             }
         }
 
-        // ===== MODO 3: PATRÓN =====
-        if (!tableDataResult || tableDataResult.length === 0) {
-            if (modoActual === 'patron' || modoActual === 'espacios' || modoActual === 'lineas') {
-                showProgress(true, 70);
-                setStatus('📋 Parseando por patrón específico...', 'info');
-                
-                try {
-                    // Si no tenemos texto, hacer OCR
-                    if (!text || text.length === 0) {
-                        var result2 = await worker.recognize(imageData);
-                        text = result2.data.text || '';
-                        showOcrResult(text);
-                    }
-                    
-                    if (text && text.length > 0) {
-                        var parsed = parsearPorPatron(text);
-                        if (parsed && parsed.length > 1) {
-                            tableDataResult = parsed;
-                            setStatus('✅ Tabla extraída por patrón (' + (tableDataResult.length - 1) + ' registros)', 'success');
-                        } else {
-                            setStatus('⚠️ No se reconoció el patrón esperado.', 'warning');
-                        }
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Error en modo patrón:', e);
-                    tableDataResult = null;
+        // Modo 3: Patrón
+        if (modoActual === 'patron' && (!tableDataResult || tableDataResult.length === 0)) {
+            try {
+                var parsed = parsearPorPatron(text);
+                if (parsed && parsed.length > 1) {
+                    tableDataResult = parsed;
+                    setStatus('✅ Tabla extraída por patrón (' + (tableDataResult.length - 1) + ' registros)', 'success');
+                } else {
+                    console.log("⚠️ Modo patrón: no se reconoció el formato");
                 }
+            } catch (e) {
+                console.warn('⚠️ Error en modo patrón:', e);
+                tableDataResult = null;
             }
         }
 
-        // ===== FALLBACK: mostrar texto =====
-        if (!tableDataResult || tableDataResult.length === 0) {
-            if (text && text.length > 0) {
-                mostrarTextoComoTabla(text);
-            } else {
-                setStatus('⚠️ No se pudo extraer ningún texto. ¿La imagen tiene texto claro?', 'warning');
-            }
-        } else {
-            // Limpiar y mostrar tabla
+        // ===== MOSTRAR RESULTADOS =====
+        showProgress(true, 90);
+        setStatus('📋 Reconstruyendo...', 'info');
+
+        if (tableDataResult && tableDataResult.length > 0) {
+            console.log("✅ Tabla extraída. Filas:", tableDataResult.length);
             var cleanData = tableDataResult.filter(function(row) {
                 return row && row.some(function(cell) { return cell && cell.length > 0; });
             });
             if (cleanData.length > 0) {
                 tableData = cleanData;
                 renderTable(tableData);
+                downloadBtn.disabled = false;
+                copyBtn.disabled = false;
+                updateCellCount();
                 var cols = tableData[0] ? tableData[0].length : 0;
                 var modoNombres = {
                     'lineas': 'Líneas',
@@ -713,9 +746,15 @@ async function processImage() {
                     'patron': 'Patrón'
                 };
                 setStatus('✅ Modo ' + modoNombres[modoActual] + ': ' + tableData.length + ' filas, ' + cols + ' columnas', 'success');
-                downloadBtn.disabled = false;
-                copyBtn.disabled = false;
-                updateCellCount();
+            } else {
+                mostrarTextoComoTabla(text);
+            }
+        } else {
+            console.warn("⚠️ No se pudo extraer tabla. Mostrando texto...");
+            if (text && text.length > 0) {
+                mostrarTextoComoTabla(text);
+            } else {
+                setStatus('⚠️ No se pudo extraer ningún texto. ¿La imagen tiene texto claro?', 'warning');
             }
         }
 
@@ -728,6 +767,7 @@ async function processImage() {
         processBtn.disabled = false;
         setTimeout(function() { showProgress(false); }, 1500);
     }
+    console.log("🚀 ===== FIN processImage =====");
 }
 
 // ============================================================
@@ -930,21 +970,21 @@ addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
 // ===== BOTONES DE MODO =====
-modoLineasBtn.addEventListener('click', function() { setModo('lineas'); });
-modoEspaciosBtn.addEventListener('click', function() { setModo('espacios'); });
-modoPatronBtn.addEventListener('click', function() { setModo('patron'); });
+if (modoLineasBtn) modoLineasBtn.addEventListener('click', function() { setModo('lineas'); });
+if (modoEspaciosBtn) modoEspaciosBtn.addEventListener('click', function() { setModo('espacios'); });
+if (modoPatronBtn) modoPatronBtn.addEventListener('click', function() { setModo('patron'); });
 
 // ============================================================
 //  INICIO
 // ============================================================
 
 console.log("🚀 Iniciando app con 3 modos de extracción...");
-setModo('lineas'); // Modo por defecto
+setModo('lineas');
 
 setTimeout(async function() {
     console.log("⏳ Ejecutando initTesseract()...");
     try {
-        const resultado = await initTesseract();
+        var resultado = await initTesseract();
         console.log("🔚 initTesseract finalizado. Resultado:", resultado);
         if (resultado) {
             setStatus('✅ OCR listo. Selecciona un modo y sube una imagen.', 'success');
