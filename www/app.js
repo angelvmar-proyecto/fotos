@@ -1,6 +1,6 @@
 // ============================================================
-//  LECTOR DE TABLAS - DETECCIÓN POR ÁNGULOS DE 90°
-//  DETECCIÓN MEJORADA PARA EXCEL Y WHATSAPP
+//  LECTOR DE TABLAS - DETECCIÓN HÍBRIDA
+//  LÍNEAS + TEXTO + ESPACIADO
 //  CON CACHÉ PARA IDIOMA ESPAÑOL
 // ============================================================
 
@@ -210,8 +210,8 @@ function detectLinesWithAngles(imageData) {
     const { binary } = preprocessImage(imageData);
     
     // Umbral para detectar líneas (más sensible)
-    const lineThreshold = 20; // Porcentaje de píxeles oscuros en una línea
-    const minLineLength = Math.min(width, height) * 0.25; // Mínimo 25% de la imagen
+    const lineThreshold = 15;
+    const minLineLength = Math.min(width, height) * 0.2;
     
     // 1. DETECTAR LÍNEAS HORIZONTALES
     const horizontalLines = [];
@@ -222,7 +222,7 @@ function detectLinesWithAngles(imageData) {
         
         for (let x = 0; x < width; x++) {
             const idx = y * width + x;
-            if (binary[idx] === 0) { // Píxel oscuro
+            if (binary[idx] === 0) {
                 darkCount++;
                 if (startX === -1) startX = x;
                 endX = x;
@@ -281,11 +281,9 @@ function detectLinesWithAngles(imageData) {
     const intersections = [];
     for (const h of filteredH) {
         for (const v of filteredV) {
-            // Verificar intersección en ángulo recto
             const x = v.x;
             const y = h.y;
             
-            // Verificar que el punto está dentro de ambas líneas
             const withinH = (x >= h.x1 && x <= h.x2);
             const withinV = (y >= v.y1 && y <= v.y2);
             
@@ -316,6 +314,263 @@ function filterCloseLines(lines, axis, threshold) {
         }
     }
     return filtered;
+}
+
+// ============================================================
+//  DETECCIÓN DE BLOQUES DE TEXTO
+// ============================================================
+
+function detectTextBlocks(imageData) {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+    
+    // Convertir a grises y binarizar
+    const binary = new Uint8Array(width * height);
+    for (let i = 0; i < data.length; i += 4) {
+        const idx = i / 4;
+        const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+        binary[idx] = gray < 128 ? 0 : 255;
+    }
+    
+    // Encontrar regiones conectadas (bloques de texto)
+    const visited = new Uint8Array(width * height);
+    const blocks = [];
+    
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (binary[idx] === 0 && !visited[idx]) {
+                const block = floodFill(binary, visited, width, height, x, y);
+                if (block.length > 10) {
+                    blocks.push(block);
+                }
+            }
+        }
+    }
+    
+    const textBlocks = blocks.map(block => {
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        let sumX = 0, sumY = 0;
+        
+        for (const [px, py] of block) {
+            minX = Math.min(minX, px);
+            maxX = Math.max(maxX, px);
+            minY = Math.min(minY, py);
+            maxY = Math.max(maxY, py);
+            sumX += px;
+            sumY += py;
+        }
+        
+        return {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+            centerX: sumX / block.length,
+            centerY: sumY / block.length,
+            area: block.length
+        };
+    });
+    
+    return textBlocks.filter(b => b.width > 5 && b.height > 5);
+}
+
+function floodFill(binary, visited, width, height, startX, startY) {
+    const queue = [[startX, startY]];
+    const region = [];
+    const dirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+    
+    while (queue.length > 0) {
+        const [x, y] = queue.shift();
+        const idx = y * width + x;
+        
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        if (visited[idx]) continue;
+        if (binary[idx] !== 0) continue;
+        
+        visited[idx] = 1;
+        region.push([x, y]);
+        
+        for (const [dx, dy] of dirs) {
+            queue.push([x + dx, y + dy]);
+        }
+    }
+    
+    return region;
+}
+
+// ============================================================
+//  DETECCIÓN DE TABLA DESDE BLOQUES DE TEXTO
+// ============================================================
+
+function detectTableFromText(textBlocks, width, height) {
+    if (textBlocks.length < 4) return { horizontalLines: [], verticalLines: [], intersections: [] };
+    
+    // 1. Agrupar bloques por Y (filas)
+    const sortedByY = [...textBlocks].sort((a, b) => a.centerY - b.centerY);
+    const rows = [];
+    let currentRow = [];
+    const thresholdY = 20;
+    
+    for (const block of sortedByY) {
+        if (currentRow.length === 0 || 
+            Math.abs(block.centerY - currentRow[0].centerY) < thresholdY) {
+            currentRow.push(block);
+        } else {
+            if (currentRow.length > 1) {
+                rows.push(currentRow);
+            }
+            currentRow = [block];
+        }
+    }
+    if (currentRow.length > 1) rows.push(currentRow);
+    
+    // 2. Para cada fila, ordenar por X (columnas)
+    const tableRows = rows.map(row => 
+        [...row].sort((a, b) => a.centerX - b.centerX)
+    );
+    
+    // 3. Calcular líneas horizontales (entre filas)
+    const horizontalLines = [];
+    for (let i = 0; i < tableRows.length - 1; i++) {
+        const row1 = tableRows[i];
+        const row2 = tableRows[i + 1];
+        const y = Math.round((row1[0].centerY + row2[0].centerY) / 2);
+        horizontalLines.push({
+            y: y,
+            x1: 0,
+            x2: width
+        });
+    }
+    
+    // 4. Calcular líneas verticales (entre columnas)
+    const verticalLines = [];
+    const numCols = Math.min(...tableRows.map(row => row.length));
+    for (let col = 0; col < numCols - 1; col++) {
+        let x = 0;
+        let count = 0;
+        for (const row of tableRows) {
+            if (row.length > col + 1) {
+                x += (row[col].centerX + row[col + 1].centerX) / 2;
+                count++;
+            }
+        }
+        if (count > 0) {
+            x = Math.round(x / count);
+            verticalLines.push({
+                x: x,
+                y1: 0,
+                y2: height
+            });
+        }
+    }
+    
+    // 5. Generar intersecciones
+    const intersections = [];
+    for (const h of horizontalLines) {
+        for (const v of verticalLines) {
+            intersections.push({ x: v.x, y: h.y });
+        }
+    }
+    
+    console.log(`📐 Líneas desde texto - H: ${horizontalLines.length}, V: ${verticalLines.length}`);
+    console.log(`📍 Intersecciones desde texto: ${intersections.length}`);
+    
+    return {
+        horizontalLines: horizontalLines,
+        verticalLines: verticalLines,
+        intersections: intersections
+    };
+}
+
+// ============================================================
+//  ENFOQUE HÍBRIDO: COMBINAR LÍNEAS Y TEXTO
+// ============================================================
+
+function detectTableHybrid(imageData) {
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // 1. Detectar líneas (método tradicional)
+    const lineResult = detectLinesWithAngles(imageData);
+    
+    // 2. Detectar bloques de texto
+    const textBlocks = detectTextBlocks(imageData);
+    console.log(`📝 Bloques de texto detectados: ${textBlocks.length}`);
+    
+    // 3. Si hay suficientes líneas, usar ese método
+    if (lineResult.intersections.length > 10) {
+        console.log('✅ Usando detección por líneas');
+        return lineResult;
+    }
+    
+    // 4. Si no hay suficientes líneas, usar detección por texto
+    if (textBlocks.length > 5) {
+        console.log('✅ Usando detección por texto');
+        return detectTableFromText(textBlocks, width, height);
+    }
+    
+    // 5. Enfoque híbrido: combinar ambos
+    console.log('🔄 Usando detección híbrida');
+    return detectTableHybridCombine(lineResult, textBlocks, width, height);
+}
+
+function detectTableHybridCombine(lineResult, textBlocks, width, height) {
+    // Si no hay líneas, usar solo texto
+    if (lineResult.intersections.length < 4) {
+        return detectTableFromText(textBlocks, width, height);
+    }
+    
+    // Detectar líneas faltantes usando texto
+    const textResult = detectTableFromText(textBlocks, width, height);
+    
+    // Combinar líneas horizontales
+    for (const h of textResult.horizontalLines) {
+        let exists = false;
+        for (const existing of lineResult.horizontalLines) {
+            if (Math.abs(existing.y - h.y) < 10) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            lineResult.horizontalLines.push(h);
+        }
+    }
+    
+    // Combinar líneas verticales
+    for (const v of textResult.verticalLines) {
+        let exists = false;
+        for (const existing of lineResult.verticalLines) {
+            if (Math.abs(existing.x - v.x) < 10) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            lineResult.verticalLines.push(v);
+        }
+    }
+    
+    // Reordenar líneas
+    lineResult.horizontalLines.sort((a, b) => a.y - b.y);
+    lineResult.verticalLines.sort((a, b) => a.x - b.x);
+    
+    // Recalcular intersecciones
+    const newIntersections = [];
+    for (const h of lineResult.horizontalLines) {
+        for (const v of lineResult.verticalLines) {
+            newIntersections.push({ x: v.x, y: h.y });
+        }
+    }
+    lineResult.intersections = newIntersections;
+    
+    console.log(`🔄 Híbrido - H: ${lineResult.horizontalLines.length}, V: ${lineResult.verticalLines.length}`);
+    console.log(`📍 Intersecciones híbridas: ${lineResult.intersections.length}`);
+    
+    return lineResult;
 }
 
 // ============================================================
@@ -365,12 +620,9 @@ function detectCellsFromIntersections(intersections) {
     const colCount = tableCells[0].length;
     for (const row of tableCells) {
         if (row.length !== colCount) {
-            // Intentar normalizar
             if (row.length > colCount) {
-                // Tomar solo las primeras colCount
                 row.splice(colCount);
             } else if (row.length < colCount) {
-                // Rellenar con puntos de intersección estimados
                 const lastX = row[row.length - 1].x;
                 const firstX = row[0].x;
                 const spacing = (lastX - firstX) / (colCount - 1);
@@ -390,7 +642,6 @@ function detectCellsFromIntersections(intersections) {
 // ============================================================
 
 async function extractCellsWithOCR(imageData, cells) {
-    // Dibujar imagen en canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = imageData.width;
@@ -400,35 +651,29 @@ async function extractCellsWithOCR(imageData, cells) {
     const tableData = [];
     const padding = 4;
     
-    // Para cada celda (excepto la última fila y columna)
     for (let row = 0; row < cells.length - 1; row++) {
         const rowData = [];
         for (let col = 0; col < cells[row].length - 1; col++) {
-            // Definir área de la celda
             const x1 = Math.max(0, cells[row][col].x + padding);
             const y1 = Math.max(0, cells[row][col].y + padding);
             const x2 = Math.min(imageData.width, cells[row][col + 1].x - padding);
             const y2 = Math.min(imageData.height, cells[row + 1][col].y - padding);
             
-            // Validar que la celda tiene tamaño
             if (x2 <= x1 || y2 <= y1) {
                 rowData.push('');
                 continue;
             }
             
-            // Recortar celda
             const cellCanvas = document.createElement('canvas');
             cellCanvas.width = x2 - x1;
             cellCanvas.height = y2 - y1;
             const cellCtx = cellCanvas.getContext('2d');
             cellCtx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1);
             
-            // Mejorar imagen de la celda
             const cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
             enhanceCellImage(cellImageData);
             cellCtx.putImageData(cellImageData, 0, 0);
             
-            // OCR en la celda
             try {
                 const text = await recognizeCell(cellCanvas);
                 rowData.push(text);
@@ -447,7 +692,6 @@ async function extractCellsWithOCR(imageData, cells) {
 
 function enhanceCellImage(imageData) {
     const data = imageData.data;
-    // Aumentar contraste
     for (let i = 0; i < data.length; i += 4) {
         const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
         const enhanced = gray < 128 ? 0 : 255;
@@ -458,12 +702,10 @@ function enhanceCellImage(imageData) {
 }
 
 async function recognizeCell(canvas) {
-    // Si la celda es muy pequeña
     if (canvas.width < 10 || canvas.height < 10) {
         return '';
     }
     
-    // Redimensionar para mejor OCR
     const targetSize = 100;
     let resizeCanvas = canvas;
     if (canvas.width < targetSize || canvas.height < targetSize) {
@@ -510,7 +752,6 @@ async function processImage() {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
 
-        // Obtener ImageData
         const img = new Image();
         img.src = await fileToBase64(currentImageFile);
         await img.decode();
@@ -518,7 +759,6 @@ async function processImage() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        // Redimensionar si es muy grande
         let width = img.width;
         let height = img.height;
         const maxSize = 2000;
@@ -535,13 +775,11 @@ async function processImage() {
         const imageData = ctx.getImageData(0, 0, width, height);
 
         showProgress(true, 25);
-        setStatus('📐 Detectando líneas con ángulos de 90°...', 'info');
+        setStatus('📐 Detectando tabla con método híbrido...', 'info');
 
-        // Detectar líneas con intersecciones de 90°
-        const { horizontalLines, verticalLines, intersections } = detectLinesWithAngles(imageData);
+        const { horizontalLines, verticalLines, intersections } = detectTableHybrid(imageData);
         
         if (intersections.length < 4) {
-            // No hay tabla detectable, usar OCR normal
             showProgress(true, 50);
             setStatus('📄 No se detectó tabla. Usando OCR general...', 'warning');
             
@@ -570,7 +808,6 @@ async function processImage() {
         showProgress(true, 50);
         setStatus('📊 Identificando celdas...', 'info');
 
-        // Detectar celdas desde intersecciones
         const cells = detectCellsFromIntersections(intersections);
         
         if (!cells || cells.length < 2) {
@@ -583,13 +820,11 @@ async function processImage() {
         showProgress(true, 65);
         setStatus('🔍 Leyendo cada celda...', 'info');
 
-        // Extraer cada celda con OCR
         let tableDataResult = [];
         try {
             tableDataResult = await extractCellsWithOCR(imageData, cells);
         } catch (ocrError) {
             console.warn('Error en OCR de celdas:', ocrError);
-            // Si falla, intentar con OCR normal de toda la imagen
             setStatus('⚠️ Error en celdas. Usando OCR general...', 'warning');
             const enhancedCanvas = document.createElement('canvas');
             enhancedCanvas.width = width;
@@ -612,9 +847,7 @@ async function processImage() {
         showProgress(true, 90);
         setStatus('📋 Reconstruyendo tabla...', 'info');
 
-        // Mostrar tabla
         if (tableDataResult && tableDataResult.length > 0) {
-            // Limpiar filas vacías
             const cleanData = tableDataResult.filter(row => row.some(cell => cell.length > 0));
             if (cleanData.length > 0) {
                 tableData = cleanData;
@@ -785,7 +1018,7 @@ function copyTable() {
 }
 
 // ============================================================
-//  LIMPIAR CACHÉ DE OCR (OPCIONAL)
+//  LIMPIAR CACHÉ DE OCR
 // ============================================================
 
 function clearOCRCache() {
@@ -835,7 +1068,6 @@ addRowBtn.addEventListener('click', addRow);
 addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
-// Limpiar caché con doble toque en el título
 document.querySelector('h1').addEventListener('dblclick', () => {
     if (confirm('¿Limpiar caché de OCR? (Esto forzará recargar el idioma español)')) {
         clearOCRCache();
@@ -853,7 +1085,7 @@ setTimeout(async () => {
     await initTesseract();
 }, 1000);
 
-console.log('📊 Lector de Tablas - Detección por ángulos de 90°');
-console.log('📐 Optimizado para Excel y WhatsApp');
+console.log('📊 Lector de Tablas - Detección Híbrida');
+console.log('📐 Líneas + Texto + Espaciado');
 console.log('💾 Caché de OCR activado');
 console.log('🔄 Doble toque en el título para limpiar caché');
