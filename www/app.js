@@ -84,7 +84,7 @@ function setModo(modo) {
 }
 
 // ============================================================
-//  MANEJO DE IMÁGENES
+//  MANEJO DE IMÁGENES (CORREGIDO)
 // ============================================================
 
 async function handleFile(file) {
@@ -98,14 +98,21 @@ async function handleFile(file) {
     try {
         const reader = new FileReader();
         reader.onload = function(e) {
-            previewImage.src = e.target.result;
+            const base64 = e.target.result;
+            console.log("✅ Imagen cargada en base64. Longitud:", base64.length);
+            previewImage.src = base64;
             previewImage.style.display = 'block';
-            currentImageFile = e.target.result;
+            currentImageFile = base64;
             processBtn.disabled = false;
             setStatus('📸 Imagen cargada.', 'info');
         };
+        reader.onerror = function(e) {
+            console.error("❌ Error al leer la imagen:", e);
+            setStatus('❌ Error al leer el archivo', 'error');
+        };
         reader.readAsDataURL(file);
     } catch (error) {
+        console.error("❌ Error en handleFile:", error);
         setStatus('❌ Error: ' + error.message, 'error');
     }
 }
@@ -122,13 +129,10 @@ async function initOCR() {
         statusLoading.textContent = '⏳ Inicializando OCR nativo...';
         showProgress(true, 10);
 
-        // Verificar si el plugin está disponible
         if (typeof Ocr === 'undefined') {
             throw new Error('ML Kit OCR no está disponible. Revisa la instalación.');
         }
 
-        // ML Kit no requiere descarga de modelos en primer uso
-        // Los modelos vienen con el plugin nativo
         ocrReady = true;
         statusLoading.style.display = 'none';
         setStatus('✅ OCR nativo listo.', 'success');
@@ -148,25 +152,22 @@ async function initOCR() {
 }
 
 // ============================================================
-//  OCR CON ML KIT (NATIVO)
+//  OCR CON ML KIT (NATIVO) - CORREGIDO
 // ============================================================
 
 async function reconocerTexto(imageData) {
     try {
         console.log("📸 Enviando imagen a ML Kit OCR...");
         
-        // Convertir ImageData a base64
         var canvas = document.createElement('canvas');
         canvas.width = imageData.width;
         canvas.height = imageData.height;
         var ctx = canvas.getContext('2d');
         ctx.putImageData(imageData, 0, 0);
-        var base64 = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Extraer solo el base64 sin el prefijo
-        var base64Data = base64.split(',')[1];
+        var base64ConPrefijo = canvas.toDataURL('image/jpeg', 0.9);
+        var base64Data = base64ConPrefijo.split(',')[1];
         
-        // Ejecutar OCR con ML Kit
         const result = await Ocr.processImage({
             image: {
                 path: base64Data,
@@ -177,7 +178,6 @@ async function reconocerTexto(imageData) {
         
         console.log("✅ OCR completado. Bloques:", result.blocks.length);
         
-        // Extraer todo el texto
         var textoCompleto = '';
         for (var i = 0; i < result.blocks.length; i++) {
             for (var j = 0; j < result.blocks[i].lines.length; j++) {
@@ -514,7 +514,6 @@ async function processImage() {
         ctx.drawImage(img, 0, 0);
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // ===== OCR NATIVO =====
         showProgress(true, 30);
         setStatus('📸 Aplicando OCR nativo...', 'info');
 
@@ -545,7 +544,6 @@ async function processImage() {
 
         showProgress(true, 50);
 
-        // ===== EXTRACCIÓN SEGÚN MODO =====
         if (modoActual === 'lineas') {
             try {
                 tableDataResult = await extraerPorLineas(imageData);
@@ -581,7 +579,6 @@ async function processImage() {
             }
         }
 
-        // ===== MOSTRAR RESULTADOS =====
         if (tableDataResult && tableDataResult.length > 0) {
             var cleanData = tableDataResult.filter(function(row) {
                 return row && row.some(function(cell) { return cell && cell.length > 0; });
