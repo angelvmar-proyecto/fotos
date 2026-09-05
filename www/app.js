@@ -508,6 +508,30 @@ async function recognizeCell(imageData) {
 }
 
 // ============================================================
+//  MOSTRAR TEXTO COMO TABLA (FALLBACK)
+// ============================================================
+
+function mostrarTextoComoTabla(text) {
+    var lines = text.split('\n').filter(function(line) { return line.trim().length > 0; });
+    if (lines.length === 0) {
+        setStatus('⚠️ No se detectó texto en la imagen.', 'warning');
+        return;
+    }
+    
+    var data = [['Texto extraído']];
+    for (var i = 0; i < Math.min(lines.length, 50); i++) {
+        data.push([lines[i]]);
+    }
+    
+    tableData = data;
+    renderTable(tableData);
+    downloadBtn.disabled = false;
+    copyBtn.disabled = false;
+    updateCellCount();
+    setStatus('📄 Texto extraído (' + (data.length - 1) + ' líneas). Puedes editar la tabla manualmente.', 'warning');
+}
+
+// ============================================================
 //  PROCESAR IMAGEN COMPLETO CON MANEJO DE ERRORES
 // ============================================================
 
@@ -527,6 +551,9 @@ async function processImage() {
     isProcessing = true;
     processBtn.disabled = true;
 
+    var text = '';
+    var tableDataResult = null;
+
     try {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
@@ -542,12 +569,12 @@ async function processImage() {
         ctx.drawImage(img, 0, 0);
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+        // 1. Intentar detectar líneas
         showProgress(true, 25);
         setStatus('📐 Detectando líneas...', 'info');
 
         var intersections = [];
         var cells = [];
-        var tableDataResult = null;
 
         try {
             var linesResult = detectLines(imageData);
@@ -579,11 +606,11 @@ async function processImage() {
             }
         }
 
+        // 2. Si no hay líneas, usar OCR general
         if (!tableDataResult || tableDataResult.length === 0) {
             showProgress(true, 50);
-            setStatus('📄 Usando OCR general + detección por espacios...', 'warning');
+            setStatus('📄 Usando OCR general...', 'warning');
 
-            var text = '';
             try {
                 var result = await worker.recognize(imageData);
                 text = result.data.text || '';
@@ -605,21 +632,11 @@ async function processImage() {
                     tableDataResult = null;
                 }
             }
-
-            if (!tableDataResult || tableDataResult.length === 0) {
-                var lines = text ? text.split('\n').filter(function(l) { return l.trim(); }) : [];
-                if (lines.length > 0) {
-                    tableDataResult = [['Texto extraído']];
-                    for (var i = 0; i < lines.length; i++) {
-                        tableDataResult.push([lines[i]]);
-                    }
-                    setStatus('⚠️ No se detectó tabla. Mostrando texto.', 'warning');
-                }
-            }
         }
 
+        // 3. SIEMPRE mostrar algo (tabla o texto)
         showProgress(true, 90);
-        setStatus('📋 Reconstruyendo tabla...', 'info');
+        setStatus('📋 Reconstruyendo...', 'info');
 
         if (tableDataResult && tableDataResult.length > 0) {
             var cleanData = tableDataResult.filter(function(row) {
@@ -634,10 +651,15 @@ async function processImage() {
                 copyBtn.disabled = false;
                 updateCellCount();
             } else {
-                setStatus('⚠️ No se detectaron datos.', 'warning');
+                mostrarTextoComoTabla(text);
             }
         } else {
-            setStatus('⚠️ No se pudo extraer la tabla.', 'warning');
+            // Si no hay tableDataResult, usar texto OCR
+            if (text && text.length > 0) {
+                mostrarTextoComoTabla(text);
+            } else {
+                setStatus('⚠️ No se pudo extraer ningún texto.', 'warning');
+            }
         }
 
         showProgress(true, 100);
