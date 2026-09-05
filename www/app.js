@@ -57,10 +57,10 @@ function showOcrResult(text) {
 }
 
 // ============================================================
-//  MANEJO DE IMÁGENES
+//  MANEJO DE IMÁGENES CON CAPACITOR FILESYSTEM
 // ============================================================
 
-function handleFile(file) {
+async function handleFile(file) {
     console.log("📂 Archivo seleccionado:", file.name, "Tamaño:", file.size);
 
     if (!file || !file.type.startsWith('image/')) {
@@ -68,23 +68,26 @@ function handleFile(file) {
         return;
     }
 
-    currentImageFile = file;
-    const reader = new FileReader();
-    
-    reader.onload = function(e) {
-        console.log("✅ Imagen convertida a base64 correctamente");
-        previewImage.src = e.target.result;
-        previewImage.style.display = 'block';
-        processBtn.disabled = false;
-        setStatus('📸 Imagen cargada. Toca "Extraer".', 'info');
-    };
-    
-    reader.onerror = function(e) {
-        console.error("❌ Error al leer la imagen:", e);
-        setStatus('❌ Error al leer el archivo', 'error');
-    };
-    
-    reader.readAsDataURL(file);
+    try {
+        // Usar FileReader directamente (funciona en web y en APK con Capacitor)
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            console.log("✅ Imagen convertida a base64 correctamente");
+            previewImage.src = e.target.result;
+            previewImage.style.display = 'block';
+            currentImageFile = e.target.result;
+            processBtn.disabled = false;
+            setStatus('📸 Imagen cargada. Toca "Extraer".', 'info');
+        };
+        reader.onerror = function(e) {
+            console.error("❌ Error al leer la imagen:", e);
+            setStatus('❌ Error al leer el archivo. Intenta con otra imagen.', 'error');
+        };
+        reader.readAsDataURL(file);
+    } catch (error) {
+        console.error("❌ Error en handleFile:", error);
+        setStatus('❌ Error al leer el archivo: ' + error.message, 'error');
+    }
 }
 
 // ============================================================
@@ -575,7 +578,7 @@ async function processImage() {
         setStatus('🔍 Procesando imagen...', 'info');
 
         var img = new Image();
-        img.src = await fileToBase64(currentImageFile);
+        img.src = currentImageFile;
         await img.decode();
 
         var canvas = document.createElement('canvas');
@@ -873,15 +876,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function fileToBase64(file) {
-    return new Promise(function(resolve, reject) {
-        var reader = new FileReader();
-        reader.onload = function() { resolve(reader.result); };
-        reader.onerror = function() { reject(reader.error); };
-        reader.readAsDataURL(file);
-    });
-}
-
 function updateCellCount() {
     var count = 0;
     for (var i = 0; i < tableData.length; i++) {
@@ -907,13 +901,12 @@ addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
 // ============================================================
-//  INICIO - CON LOGS DE DEPURACIÓN Y MANEJO DE ERRORES
+//  INICIO
 // ============================================================
 
 console.log("🚀 Iniciando app...");
 setStatus('📸 Sube una captura de pantalla', 'info');
 
-// Cargar Tesseract después de 1 segundo
 setTimeout(async function() {
     console.log("⏳ Ejecutando initTesseract()...");
     try {
