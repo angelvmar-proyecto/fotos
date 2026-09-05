@@ -1,0 +1,8 @@
+{
+  "name": "Lector de Tablas",
+  "short_name": "TabReader",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#25D366"
+}
