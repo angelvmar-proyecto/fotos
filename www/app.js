@@ -1,6 +1,5 @@
-// ============================================================
-//  LECTOR DE TABLAS - DETECCIÓN HÍBRIDA (LÍNEAS + ESPACIOS)
-//  100% OFFLINE - Canvas API + Tesseract.js
+/// ============================================================
+//  LECTOR DE TABLAS - 3 MODOS DE EXTRACCIÓN
 // ============================================================
 
 let currentImageFile = null;
@@ -8,6 +7,7 @@ let tableData = [];
 let worker = null;
 let isProcessing = false;
 let tesseractReady = false;
+let modoActual = 'lineas'; // 'lineas' | 'espacios' | 'patron'
 
 // ===== DOM REFERENCIAS =====
 const dropZone = document.getElementById('dropZone');
@@ -26,6 +26,12 @@ const addRowBtn = document.getElementById('addRowBtn');
 const addColBtn = document.getElementById('addColBtn');
 const clearBtn = document.getElementById('clearBtn');
 const cellCount = document.getElementById('cellCount');
+
+// ===== BOTONES DE MODO =====
+const modoLineasBtn = document.getElementById('modoLineasBtn');
+const modoEspaciosBtn = document.getElementById('modoEspaciosBtn');
+const modoPatronBtn = document.getElementById('modoPatronBtn');
+const modoActualLabel = document.getElementById('modoActualLabel');
 
 // ============================================================
 //  FUNCIONES UI
@@ -56,8 +62,28 @@ function showOcrResult(text) {
     }
 }
 
+function setModo(modo) {
+    modoActual = modo;
+    const nombres = {
+        'lineas': '🔍 Líneas (bordes)',
+        'espacios': '📊 Espacios (alineación)',
+        'patron': '📋 Patrón (formato específico)'
+    };
+    modoActualLabel.textContent = 'Modo: ' + nombres[modo];
+    
+    // Resetear botones
+    [modoLineasBtn, modoEspaciosBtn, modoPatronBtn].forEach(b => b.classList.remove('active'));
+    
+    // Activar el seleccionado
+    if (modo === 'lineas') modoLineasBtn.classList.add('active');
+    else if (modo === 'espacios') modoEspaciosBtn.classList.add('active');
+    else if (modo === 'patron') modoPatronBtn.classList.add('active');
+    
+    setStatus('📸 Modo ' + nombres[modo] + ' seleccionado. Sube una imagen.', 'info');
+}
+
 // ============================================================
-//  MANEJO DE IMÁGENES CON CAPACITOR FILESYSTEM
+//  MANEJO DE IMÁGENES
 // ============================================================
 
 async function handleFile(file) {
@@ -69,7 +95,6 @@ async function handleFile(file) {
     }
 
     try {
-        // Usar FileReader directamente (funciona en web y en APK con Capacitor)
         const reader = new FileReader();
         reader.onload = function(e) {
             console.log("✅ Imagen convertida a base64 correctamente");
@@ -77,7 +102,7 @@ async function handleFile(file) {
             previewImage.style.display = 'block';
             currentImageFile = e.target.result;
             processBtn.disabled = false;
-            setStatus('📸 Imagen cargada. Toca "Extraer".', 'info');
+            setStatus('📸 Imagen cargada. Selecciona un modo y toca "Extraer".', 'info');
         };
         reader.onerror = function(e) {
             console.error("❌ Error al leer la imagen:", e);
@@ -152,7 +177,7 @@ async function initTesseract() {
 }
 
 // ============================================================
-//  DETECCIÓN DE LÍNEAS CON CANVAS API
+//  MODO 1: DETECCIÓN POR LÍNEAS (ángulos de 90°)
 // ============================================================
 
 function detectLines(imageData) {
@@ -240,11 +265,7 @@ function filterCloseLines(lines, axis, threshold) {
     return filtered;
 }
 
-// ============================================================
-//  DETECTAR CELDAS DESDE INTERSECCIONES
-// ============================================================
-
-function detectCells(intersections) {
+function detectCellsFromLines(intersections) {
     if (intersections.length < 4) return [];
     
     var rows = [];
@@ -275,8 +296,67 @@ function detectCells(intersections) {
     return tableCells;
 }
 
+async function extraerPorLineas(imageData) {
+    var linesResult = detectLines(imageData);
+    var intersections = linesResult.intersections || [];
+    
+    if (intersections.length < 4) {
+        return null;
+    }
+    
+    var cells = detectCellsFromLines(intersections);
+    if (!cells || cells.length < 2) {
+        return null;
+    }
+    
+    // Extraer cada celda con OCR
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+    ctx.putImageData(imageData, 0, 0);
+    
+    var tableData = [];
+    var padding = 5;
+    
+    for (var row = 0; row < cells.length - 1; row++) {
+        var rowData = [];
+        for (var col = 0; col < cells[row].length - 1; col++) {
+            var x1 = cells[row][col].x + padding;
+            var y1 = cells[row][col].y + padding;
+            var x2 = cells[row][col + 1].x - padding;
+            var y2 = cells[row + 1][col].y - padding;
+            
+            if (x2 <= x1 || y2 <= y1) {
+                rowData.push('');
+                continue;
+            }
+            
+            var cellCanvas = document.createElement('canvas');
+            cellCanvas.width = x2 - x1;
+            cellCanvas.height = y2 - y1;
+            var cellCtx = cellCanvas.getContext('2d');
+            cellCtx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1);
+            
+            try {
+                var cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
+                var text = await recognizeCell(cellImageData);
+                rowData.push(text);
+            } catch (e) {
+                console.warn('Error en celda:', e);
+                rowData.push('');
+            }
+        }
+        if (rowData.length > 0) {
+            tableData.push(rowData);
+        }
+    }
+    
+    return tableData.length > 0 ? tableData : null;
+}
+
 // ============================================================
-//  DETECCIÓN DE TABLAS POR ESPACIOS (SIN LÍNEAS)
+//  MODO 2: DETECCIÓN POR ESPACIOS (sin líneas)
 // ============================================================
 
 function detectTableBySpacing(text) {
@@ -377,135 +457,83 @@ function extractColumns(line, columnPositions) {
 }
 
 // ============================================================
-//  PARSER DE TABLA MEJORADO (HÍBRIDO)
+//  MODO 3: PARSEO POR PATRÓN (formato específico)
 // ============================================================
 
-function parseTable(text) {
-    var lines = text.split('\n')
-        .map(function(line) { return line.trim(); })
-        .filter(function(line) { return line.length > 0 && !line.match(/^[-\s]+$/); });
-
-    if (lines.length < 2) return null;
-
-    var sep = detectSeparator(lines);
+function parsearPorPatron(texto) {
+    console.log("📋 Parseando por patrón...");
     
-    if (sep !== 'spaces') {
-        var table = lines.map(function(line) {
-            var cells;
-            if (sep === 'tab') cells = line.split('\t');
-            else if (sep === 'pipe') cells = line.split('|').filter(function(c) { return c.trim(); });
-            else if (sep === 'comma') cells = line.split(',').map(function(c) { return c.trim(); });
-            else if (sep === 'semicolon') cells = line.split(';').map(function(c) { return c.trim(); });
-            else cells = line.split(/\s{2,}/).map(function(c) { return c.trim(); });
-            return cells.filter(function(c) { return c.length > 0; });
-        });
-        
-        var filtered = table.filter(function(row) { return row.length > 0; });
-        if (filtered.length > 0) {
-            var maxCols = Math.max.apply(null, filtered.map(function(row) { return row.length; }));
-            return filtered.map(function(row) {
-                while (row.length < maxCols) row.push('');
-                return row;
+    // Dividir por números seguidos de "INT"
+    var registros = [];
+    var partes = texto.split(/(\d+)\s+INT\s+/);
+    
+    if (partes.length < 3) {
+        console.warn("⚠️ No se encontró el patrón esperado (número + INT)");
+        return null;
+    }
+    
+    for (var i = 1; i < partes.length; i += 2) {
+        var numero = partes[i] ? partes[i].trim() : '';
+        var contenido = partes[i+1] ? partes[i+1].trim() : '';
+        if (numero && contenido) {
+            registros.push({
+                numero: numero,
+                contenido: contenido
             });
         }
     }
     
-    var spacedTable = detectTableBySpacing(text);
-    if (spacedTable && spacedTable.length > 1) {
-        return spacedTable;
+    if (registros.length === 0) {
+        return null;
     }
     
-    var fallback = lines.map(function(line) {
-        var parts = line.split(/\s{2,}/).map(function(c) { return c.trim(); });
-        return parts.length > 1 ? parts : [line];
-    });
+    console.log("✅ Encontrados " + registros.length + " registros");
     
-    var filtered2 = fallback.filter(function(row) { return row.length > 0; });
-    if (filtered2.length > 0) {
-        var maxCols2 = Math.max.apply(null, filtered2.map(function(row) { return row.length; }));
-        return filtered2.map(function(row) {
-            while (row.length < maxCols2) row.push('');
-            return row;
-        });
+    // Extraer campos de cada registro
+    var resultados = [];
+    for (var r = 0; r < registros.length; r++) {
+        var reg = registros[r];
+        var contenido = reg.contenido;
+        
+        // Extraer campos con regex
+        var codigoMatch = contenido.match(/(PREMIER\s+T\w+)/);
+        var nombreMatch = contenido.match(/([A-Z]+\s+[A-Z]+[A-Z\s]*)/);
+        var hotelMatch = contenido.match(/([A-Z]+\s*-\s*[A-Z]+\s+[A-Z]+)/);
+        var horaMatch = contenido.match(/(\d{1,2}:\d{2}\s+[ap]\.m\.)/);
+        var fechaMatch = contenido.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+        var montoMatch = contenido.match(/(\d+)\s+USD/);
+        var estadoMatch = contenido.match(/(SINGLE|MARRIED|APTO)/);
+        var destinoMatch = contenido.match(/USA\s*-\s*([A-Z\s]+)/);
+        var observacionMatch = contenido.match(/Nota:\s*([^.]*?)(?:\s+[A-Z]|$)/);
+        
+        var fila = [
+            reg.numero || '',
+            codigoMatch ? codigoMatch[1] : '',
+            nombreMatch ? nombreMatch[1].trim() : '',
+            hotelMatch ? hotelMatch[1] : '',
+            horaMatch ? horaMatch[1] : '',
+            fechaMatch ? fechaMatch[1] : '',
+            montoMatch ? montoMatch[1] : '',
+            destinoMatch ? 'USA - ' + destinoMatch[1].trim() : '',
+            estadoMatch ? estadoMatch[1] : '',
+            observacionMatch ? observacionMatch[1].trim() : ''
+        ];
+        
+        resultados.push(fila);
     }
     
-    return null;
-}
-
-function detectSeparator(lines) {
-    var counts = { tab: 0, pipe: 0, comma: 0, semicolon: 0 };
-    var sample = lines.slice(0, Math.min(lines.length, 10));
+    // Agregar encabezados
+    var encabezados = [
+        'Número', 'Código', 'Nombre', 'Hotel', 'Hora', 
+        'Fecha', 'Monto (USD)', 'Destino', 'Estado', 'Observación'
+    ];
     
-    for (var i = 0; i < sample.length; i++) {
-        var line = sample[i];
-        if (line.includes('\t')) counts.tab++;
-        if (line.includes('|')) counts.pipe++;
-        if (line.includes(',')) counts.comma++;
-        if (line.includes(';')) counts.semicolon++;
-    }
-    
-    var max = 0;
-    var best = 'spaces';
-    var keys = Object.keys(counts);
-    for (var k = 0; k < keys.length; k++) {
-        var key = keys[k];
-        if (counts[key] > max) {
-            max = counts[key];
-            best = key;
-        }
-    }
-    return max > 0 ? best : 'spaces';
+    return [encabezados].concat(resultados);
 }
 
 // ============================================================
-//  EXTRAER CELDAS CON OCR
+//  EXTRAER CELDA CON OCR (para modo líneas)
 // ============================================================
-
-async function extractCellsWithOCR(imageData, cells) {
-    var canvas = document.createElement('canvas');
-    var ctx = canvas.getContext('2d');
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-    ctx.putImageData(imageData, 0, 0);
-    
-    var tableData = [];
-    var padding = 5;
-    
-    for (var row = 0; row < cells.length - 1; row++) {
-        var rowData = [];
-        for (var col = 0; col < cells[row].length - 1; col++) {
-            var x1 = cells[row][col].x + padding;
-            var y1 = cells[row][col].y + padding;
-            var x2 = cells[row][col + 1].x - padding;
-            var y2 = cells[row + 1][col].y - padding;
-            
-            if (x2 <= x1 || y2 <= y1) {
-                rowData.push('');
-                continue;
-            }
-            
-            var cellCanvas = document.createElement('canvas');
-            cellCanvas.width = x2 - x1;
-            cellCanvas.height = y2 - y1;
-            var cellCtx = cellCanvas.getContext('2d');
-            cellCtx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1);
-            
-            try {
-                var cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
-                var text = await recognizeCell(cellImageData);
-                rowData.push(text);
-            } catch (e) {
-                console.warn('Error en celda:', e);
-                rowData.push('');
-            }
-        }
-        if (rowData.length > 0) {
-            tableData.push(rowData);
-        }
-    }
-    
-    return tableData;
-}
 
 async function recognizeCell(imageData) {
     var canvas = document.createElement('canvas');
@@ -551,7 +579,7 @@ function mostrarTextoComoTabla(text) {
 }
 
 // ============================================================
-//  PROCESAR IMAGEN COMPLETO CON MANEJO DE ERRORES
+//  PROCESAR IMAGEN - CON 3 MODOS
 // ============================================================
 
 async function processImage() {
@@ -575,7 +603,7 @@ async function processImage() {
 
     try {
         showProgress(true, 5);
-        setStatus('🔍 Procesando imagen...', 'info');
+        setStatus('🔍 Procesando imagen... (Modo: ' + modoActual + ')', 'info');
 
         var img = new Image();
         img.src = currentImageFile;
@@ -588,85 +616,90 @@ async function processImage() {
         ctx.drawImage(img, 0, 0);
         var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // 1. Intentar detectar líneas
-        showProgress(true, 25);
-        setStatus('📐 Detectando líneas...', 'info');
-
-        var intersections = [];
-        var cells = [];
-
-        try {
-            var linesResult = detectLines(imageData);
-            intersections = linesResult.intersections || [];
-        } catch (e) {
-            console.warn('⚠️ Error en detectLines:', e);
-            intersections = [];
-        }
-
-        if (intersections.length >= 4) {
+        // ===== MODO 1: LÍNEAS =====
+        if (modoActual === 'lineas') {
+            showProgress(true, 25);
+            setStatus('📐 Detectando líneas y ángulos de 90°...', 'info');
+            
             try {
-                showProgress(true, 50);
-                setStatus('📊 Identificando celdas por líneas...', 'info');
-                cells = detectCells(intersections);
-            } catch (e) {
-                console.warn('⚠️ Error en detectCells:', e);
-                cells = [];
-            }
-
-            if (cells && cells.length >= 2) {
-                try {
-                    showProgress(true, 65);
-                    setStatus('🔍 Leyendo cada celda...', 'info');
-                    tableDataResult = await extractCellsWithOCR(imageData, cells);
-                } catch (e) {
-                    console.warn('⚠️ Error en extractCellsWithOCR:', e);
-                    tableDataResult = null;
+                tableDataResult = await extraerPorLineas(imageData);
+                if (tableDataResult && tableDataResult.length > 0) {
+                    setStatus('✅ Tabla extraída por líneas (' + tableDataResult.length + ' filas)', 'success');
+                } else {
+                    setStatus('⚠️ No se detectaron líneas. Probá otro modo.', 'warning');
                 }
+            } catch (e) {
+                console.warn('⚠️ Error en modo líneas:', e);
+                tableDataResult = null;
             }
         }
 
-        // 2. Si no hay líneas, usar OCR general
+        // ===== MODO 2: ESPACIOS =====
         if (!tableDataResult || tableDataResult.length === 0) {
-            showProgress(true, 50);
-            setStatus('📄 Usando OCR general...', 'warning');
-
-            try {
-                console.log('📸 Enviando imagen a Tesseract...');
-                var result = await worker.recognize(imageData);
-                text = result.data.text || '';
-                console.log('📄 Texto OCR (primeros 200 caracteres):', text.substring(0, 200));
-                if (!text || text.length < 5) {
-                    console.warn('⚠️ El OCR devolvió muy poco texto:', text);
-                    setStatus('⚠️ El OCR devolvió muy poco texto. ¿La imagen tiene texto claro?', 'warning');
-                }
-            } catch (e) {
-                console.error('❌ Error en OCR general:', e);
-                text = '';
-                setStatus('❌ Error en OCR: ' + (e.message || 'desconocido'), 'error');
-            }
-
-            if (text && text.length > 0) {
-                showOcrResult(text);
+            if (modoActual === 'espacios' || modoActual === 'lineas') {
+                showProgress(true, 50);
+                setStatus('📊 Extrayendo texto y detectando espacios...', 'info');
+                
                 try {
-                    var parsed = parseTable(text);
-                    if (parsed && parsed.length > 1) {
-                        tableDataResult = parsed;
-                        setStatus('✅ Tabla detectada por espacios (' + tableDataResult.length + ' filas)', 'success');
+                    var result = await worker.recognize(imageData);
+                    text = result.data.text || '';
+                    showOcrResult(text);
+                    
+                    if (text && text.length > 0) {
+                        var parsed = detectTableBySpacing(text);
+                        if (parsed && parsed.length > 1) {
+                            tableDataResult = parsed;
+                            setStatus('✅ Tabla detectada por espacios (' + tableDataResult.length + ' filas)', 'success');
+                        } else {
+                            setStatus('⚠️ No se detectaron columnas por espacios.', 'warning');
+                        }
                     }
                 } catch (e) {
-                    console.warn('⚠️ Error en parseTable:', e);
+                    console.warn('⚠️ Error en modo espacios:', e);
                     tableDataResult = null;
                 }
+            }
+        }
+
+        // ===== MODO 3: PATRÓN =====
+        if (!tableDataResult || tableDataResult.length === 0) {
+            if (modoActual === 'patron' || modoActual === 'espacios' || modoActual === 'lineas') {
+                showProgress(true, 70);
+                setStatus('📋 Parseando por patrón específico...', 'info');
+                
+                try {
+                    // Si no tenemos texto, hacer OCR
+                    if (!text || text.length === 0) {
+                        var result2 = await worker.recognize(imageData);
+                        text = result2.data.text || '';
+                        showOcrResult(text);
+                    }
+                    
+                    if (text && text.length > 0) {
+                        var parsed = parsearPorPatron(text);
+                        if (parsed && parsed.length > 1) {
+                            tableDataResult = parsed;
+                            setStatus('✅ Tabla extraída por patrón (' + (tableDataResult.length - 1) + ' registros)', 'success');
+                        } else {
+                            setStatus('⚠️ No se reconoció el patrón esperado.', 'warning');
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error en modo patrón:', e);
+                    tableDataResult = null;
+                }
+            }
+        }
+
+        // ===== FALLBACK: mostrar texto =====
+        if (!tableDataResult || tableDataResult.length === 0) {
+            if (text && text.length > 0) {
+                mostrarTextoComoTabla(text);
             } else {
                 setStatus('⚠️ No se pudo extraer ningún texto. ¿La imagen tiene texto claro?', 'warning');
             }
-        }
-
-        // 3. SIEMPRE mostrar algo (tabla o texto)
-        showProgress(true, 90);
-        setStatus('📋 Reconstruyendo...', 'info');
-
-        if (tableDataResult && tableDataResult.length > 0) {
+        } else {
+            // Limpiar y mostrar tabla
             var cleanData = tableDataResult.filter(function(row) {
                 return row && row.some(function(cell) { return cell && cell.length > 0; });
             });
@@ -674,19 +707,15 @@ async function processImage() {
                 tableData = cleanData;
                 renderTable(tableData);
                 var cols = tableData[0] ? tableData[0].length : 0;
-                setStatus('✅ Tabla extraída (' + tableData.length + ' filas, ' + cols + ' columnas)', 'success');
+                var modoNombres = {
+                    'lineas': 'Líneas',
+                    'espacios': 'Espacios',
+                    'patron': 'Patrón'
+                };
+                setStatus('✅ Modo ' + modoNombres[modoActual] + ': ' + tableData.length + ' filas, ' + cols + ' columnas', 'success');
                 downloadBtn.disabled = false;
                 copyBtn.disabled = false;
                 updateCellCount();
-            } else {
-                mostrarTextoComoTabla(text);
-            }
-        } else {
-            // Si no hay tableDataResult, usar texto OCR
-            if (text && text.length > 0) {
-                mostrarTextoComoTabla(text);
-            } else {
-                setStatus('⚠️ No se pudo extraer ningún texto. ¿La imagen tiene texto claro?', 'warning');
             }
         }
 
@@ -900,12 +929,17 @@ addRowBtn.addEventListener('click', addRow);
 addColBtn.addEventListener('click', addColumn);
 clearBtn.addEventListener('click', clearTable);
 
+// ===== BOTONES DE MODO =====
+modoLineasBtn.addEventListener('click', function() { setModo('lineas'); });
+modoEspaciosBtn.addEventListener('click', function() { setModo('espacios'); });
+modoPatronBtn.addEventListener('click', function() { setModo('patron'); });
+
 // ============================================================
 //  INICIO
 // ============================================================
 
-console.log("🚀 Iniciando app...");
-setStatus('📸 Sube una captura de pantalla', 'info');
+console.log("🚀 Iniciando app con 3 modos de extracción...");
+setModo('lineas'); // Modo por defecto
 
 setTimeout(async function() {
     console.log("⏳ Ejecutando initTesseract()...");
@@ -913,7 +947,7 @@ setTimeout(async function() {
         const resultado = await initTesseract();
         console.log("🔚 initTesseract finalizado. Resultado:", resultado);
         if (resultado) {
-            setStatus('✅ OCR listo. Sube una imagen.', 'success');
+            setStatus('✅ OCR listo. Selecciona un modo y sube una imagen.', 'success');
         } else {
             setStatus('⚠️ No se pudo cargar el OCR. Revisa tu conexión.', 'warning');
         }
@@ -923,5 +957,7 @@ setTimeout(async function() {
     }
 }, 1000);
 
-console.log('📊 Lector de Tablas - Detección Híbrida (Líneas + Espacios)');
-console.log('📐 100% OFFLINE - Sin servidores');
+console.log('📊 Lector de Tablas - 3 Modos de Extracción');
+console.log('🔍 Modo 1: Líneas (ángulos de 90°)');
+console.log('📊 Modo 2: Espacios (alineación)');
+console.log('📋 Modo 3: Patrón (formato específico)');
