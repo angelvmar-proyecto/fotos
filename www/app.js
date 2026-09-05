@@ -33,8 +33,8 @@ const cellCount = document.getElementById('cellCount');
 
 function setStatus(msg, type = 'info') {
     statusEl.textContent = msg;
-    statusEl.className = `status status-${type}`;
-    console.log(`[${type}] ${msg}`);
+    statusEl.className = 'status status-' + type;
+    console.log('[' + type + '] ' + msg);
 }
 
 function showProgress(show, value = 0) {
@@ -68,7 +68,7 @@ function handleFile(file) {
 
     currentImageFile = file;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = function(e) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'block';
         processBtn.disabled = false;
@@ -93,7 +93,7 @@ async function initTesseract() {
         showProgress(true, 5);
 
         worker = await Tesseract.createWorker('spa', 1, {
-            logger: m => {
+            logger: function(m) {
                 if (m.status === 'loading tesseract core') {
                     showProgress(true, 20);
                     statusLoading.textContent = '📦 Cargando motor OCR...';
@@ -104,28 +104,28 @@ async function initTesseract() {
                     showProgress(true, 75);
                     statusLoading.textContent = '🚀 Inicializando...';
                 } else if (m.status === 'recognizing text') {
-                    const pct = Math.round(75 + (m.progress * 25));
+                    var pct = Math.round(75 + (m.progress * 25));
                     showProgress(true, pct);
-                    statusLoading.textContent = `🔍 Reconociendo... ${pct}%`;
+                    statusLoading.textContent = '🔍 Reconociendo... ' + pct + '%';
                 }
             }
         });
 
         await worker.setParameters({
-            tessedit_pageseg_mode: 6,
+            tessedit_pageseg_mode: 6
         });
 
         showProgress(true, 100);
         tesseractReady = true;
         statusLoading.style.display = 'none';
         setStatus('✅ OCR listo.', 'success');
-        setTimeout(() => showProgress(false), 1000);
+        setTimeout(function() { showProgress(false); }, 1000);
         return true;
     } catch (error) {
         console.error('Error:', error);
         statusLoading.style.display = 'block';
         statusLoading.textContent = '❌ Error: ' + error.message;
-        setStatus(`❌ Error: ${error.message}`, 'error');
+        setStatus('❌ Error: ' + error.message, 'error');
         showProgress(false);
         tesseractReady = false;
         return false;
@@ -137,26 +137,26 @@ async function initTesseract() {
 // ============================================================
 
 function detectLines(imageData) {
-    const width = imageData.width;
-    const height = imageData.height;
-    const data = imageData.data;
+    var width = imageData.width;
+    var height = imageData.height;
+    var data = imageData.data;
     
-    const gray = new Uint8Array(width * height);
-    for (let i = 0; i < data.length; i += 4) {
-        const idx = i / 4;
+    var gray = new Uint8Array(width * height);
+    for (var i = 0; i < data.length; i += 4) {
+        var idx = i / 4;
         gray[idx] = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
     }
     
-    const threshold = 150;
-    const minLineLength = Math.min(width, height) * 0.5;
+    var threshold = 150;
+    var minLineLength = Math.min(width, height) * 0.5;
     
-    const horizontalLines = [];
-    for (let y = 0; y < height; y++) {
-        let darkCount = 0;
-        let startX = -1;
-        let endX = -1;
-        for (let x = 0; x < width; x++) {
-            const idx = y * width + x;
+    var horizontalLines = [];
+    for (var y = 0; y < height; y++) {
+        var darkCount = 0;
+        var startX = -1;
+        var endX = -1;
+        for (var x = 0; x < width; x++) {
+            var idx = y * width + x;
             if (gray[idx] < threshold) {
                 darkCount++;
                 if (startX === -1) startX = x;
@@ -164,17 +164,17 @@ function detectLines(imageData) {
             }
         }
         if (darkCount > minLineLength) {
-            horizontalLines.push({ y, x1: startX, x2: endX, length: darkCount });
+            horizontalLines.push({ y: y, x1: startX, x2: endX, length: darkCount });
         }
     }
     
-    const verticalLines = [];
-    for (let x = 0; x < width; x++) {
-        let darkCount = 0;
-        let startY = -1;
-        let endY = -1;
-        for (let y = 0; y < height; y++) {
-            const idx = y * width + x;
+    var verticalLines = [];
+    for (var x = 0; x < width; x++) {
+        var darkCount = 0;
+        var startY = -1;
+        var endY = -1;
+        for (var y = 0; y < height; y++) {
+            var idx = y * width + x;
             if (gray[idx] < threshold) {
                 darkCount++;
                 if (startY === -1) startY = y;
@@ -182,23 +182,25 @@ function detectLines(imageData) {
             }
         }
         if (darkCount > minLineLength) {
-            verticalLines.push({ x, y1: startY, y2: endY, length: darkCount });
+            verticalLines.push({ x: x, y1: startY, y2: endY, length: darkCount });
         }
     }
     
-    const filteredHorizontal = filterCloseLines(horizontalLines, 'y', 10);
-    const filteredVertical = filterCloseLines(verticalLines, 'x', 10);
+    var filteredHorizontal = filterCloseLines(horizontalLines, 'y', 10);
+    var filteredVertical = filterCloseLines(verticalLines, 'x', 10);
     
-    const intersections = [];
-    for (const h of filteredHorizontal) {
-        for (const v of filteredVertical) {
-            if (v.x >= h.x1 && v.x <= h.x2 && h.y >= v.y1 && h.y <= v.y2) {
-                intersections.push({ x: v.x, y: h.y });
+    var intersections = [];
+    for (var h = 0; h < filteredHorizontal.length; h++) {
+        for (var v = 0; v < filteredVertical.length; v++) {
+            var hLine = filteredHorizontal[h];
+            var vLine = filteredVertical[v];
+            if (vLine.x >= hLine.x1 && vLine.x <= hLine.x2 && hLine.y >= vLine.y1 && hLine.y <= vLine.y2) {
+                intersections.push({ x: vLine.x, y: hLine.y });
             }
         }
     }
     
-    console.log(`✅ Horizontales: ${filteredHorizontal.length}, Verticales: ${filteredVertical.length}, Intersecciones: ${intersections.length}`);
+    console.log('✅ Horizontales: ' + filteredHorizontal.length + ', Verticales: ' + filteredVertical.length + ', Intersecciones: ' + intersections.length);
     
     return {
         horizontalLines: filteredHorizontal,
@@ -209,9 +211,9 @@ function detectLines(imageData) {
 
 function filterCloseLines(lines, axis, threshold) {
     if (lines.length === 0) return [];
-    const sorted = [...lines].sort((a, b) => a[axis] - b[axis]);
-    const filtered = [sorted[0]];
-    for (let i = 1; i < sorted.length; i++) {
+    var sorted = lines.slice().sort(function(a, b) { return a[axis] - b[axis]; });
+    var filtered = [sorted[0]];
+    for (var i = 1; i < sorted.length; i++) {
         if (Math.abs(sorted[i][axis] - sorted[i-1][axis]) > threshold) {
             filtered.push(sorted[i]);
         }
@@ -226,12 +228,13 @@ function filterCloseLines(lines, axis, threshold) {
 function detectCells(intersections) {
     if (intersections.length < 4) return [];
     
-    const rows = [];
-    let currentRow = [];
-    const thresholdY = 15;
-    const sortedByY = [...intersections].sort((a, b) => a.y - b.y);
+    var rows = [];
+    var currentRow = [];
+    var thresholdY = 15;
+    var sortedByY = intersections.slice().sort(function(a, b) { return a.y - b.y; });
     
-    for (const point of sortedByY) {
+    for (var i = 0; i < sortedByY.length; i++) {
+        var point = sortedByY[i];
         if (currentRow.length === 0 || Math.abs(point.y - currentRow[0].y) < thresholdY) {
             currentRow.push(point);
         } else {
@@ -241,15 +244,15 @@ function detectCells(intersections) {
     }
     if (currentRow.length > 0) rows.push(currentRow);
     
-    const tableCells = [];
-    for (const row of rows) {
-        const sortedByX = [...row].sort((a, b) => a.x - b.x);
+    var tableCells = [];
+    for (var r = 0; r < rows.length; r++) {
+        var sortedByX = rows[r].slice().sort(function(a, b) { return a.x - b.x; });
         tableCells.push(sortedByX);
     }
     
     if (tableCells.length < 2 || tableCells[0].length < 2) return [];
     
-    console.log(`✅ Filas: ${tableCells.length}, Columnas: ${tableCells[0].length}`);
+    console.log('✅ Filas: ' + tableCells.length + ', Columnas: ' + tableCells[0].length);
     return tableCells;
 }
 
@@ -258,15 +261,15 @@ function detectCells(intersections) {
 // ============================================================
 
 function detectTableBySpacing(text) {
-    const lines = text.split('\n').filter(line => line.trim().length > 0);
+    var lines = text.split('\n').filter(function(line) { return line.trim().length > 0; });
     if (lines.length < 2) return null;
     
-    const columnPositions = findColumnPositions(lines);
+    var columnPositions = findColumnPositions(lines);
     if (columnPositions.length < 2) return null;
     
-    const tableData = [];
-    for (const line of lines) {
-        const row = extractColumns(line, columnPositions);
+    var tableData = [];
+    for (var i = 0; i < lines.length; i++) {
+        var row = extractColumns(lines[i], columnPositions);
         if (row.length > 0) {
             tableData.push(row);
         }
@@ -276,16 +279,17 @@ function detectTableBySpacing(text) {
 }
 
 function findColumnPositions(lines) {
-    const positions = [];
-    const minSpaces = 3;
+    var positions = [];
+    var minSpaces = 3;
+    var maxLines = Math.min(lines.length, 20);
     
-    for (let i = 0; i < Math.min(lines.length, 20); i++) {
-        const line = lines[i];
-        let spaceCount = 0;
-        let lastChar = '';
+    for (var i = 0; i < maxLines; i++) {
+        var line = lines[i];
+        var spaceCount = 0;
+        var lastChar = '';
         
-        for (let j = 0; j < line.length; j++) {
-            const char = line[j];
+        for (var j = 0; j < line.length; j++) {
+            var char = line[j];
             if (char === ' ') {
                 spaceCount++;
             } else {
@@ -302,11 +306,13 @@ function findColumnPositions(lines) {
         }
     }
     
-    const groups = [];
-    const threshold = 5;
-    for (const pos of positions) {
-        let found = false;
-        for (const group of groups) {
+    var groups = [];
+    var threshold = 5;
+    for (var p = 0; p < positions.length; p++) {
+        var pos = positions[p];
+        var found = false;
+        for (var g = 0; g < groups.length; g++) {
+            var group = groups[g];
             if (Math.abs(group.col - pos.col) < threshold) {
                 group.col = Math.round((group.col + pos.col) / 2);
                 group.count++;
@@ -319,24 +325,31 @@ function findColumnPositions(lines) {
         }
     }
     
-    groups.sort((a, b) => a.col - b.col);
-    return groups.filter(g => g.count >= 2).map(g => g.col);
+    groups.sort(function(a, b) { return a.col - b.col; });
+    var result = [];
+    for (var g = 0; g < groups.length; g++) {
+        if (groups[g].count >= 2) {
+            result.push(groups[g].col);
+        }
+    }
+    return result;
 }
 
 function extractColumns(line, columnPositions) {
-    const row = [];
-    let start = 0;
+    var row = [];
+    var start = 0;
     
-    for (const col of columnPositions) {
-        const end = Math.min(col, line.length);
-        const cell = line.substring(start, end).trim();
+    for (var c = 0; c < columnPositions.length; c++) {
+        var col = columnPositions[c];
+        var end = Math.min(col, line.length);
+        var cell = line.substring(start, end).trim();
         if (cell.length > 0 || row.length > 0) {
             row.push(cell);
         }
         start = end;
     }
     
-    const last = line.substring(start).trim();
+    var last = line.substring(start).trim();
     if (last.length > 0) {
         row.push(last);
     }
@@ -349,53 +362,50 @@ function extractColumns(line, columnPositions) {
 // ============================================================
 
 function parseTable(text) {
-    const lines = text.split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0 && !line.match(/^[-\s]+$/));
+    var lines = text.split('\n')
+        .map(function(line) { return line.trim(); })
+        .filter(function(line) { return line.length > 0 && !line.match(/^[-\s]+$/); });
 
     if (lines.length < 2) return null;
 
-    // 1. Intentar detectar separadores comunes
-    const sep = detectSeparator(lines);
+    var sep = detectSeparator(lines);
     
     if (sep !== 'spaces') {
-        const table = lines.map(line => {
-            let cells;
+        var table = lines.map(function(line) {
+            var cells;
             if (sep === 'tab') cells = line.split('\t');
-            else if (sep === 'pipe') cells = line.split('|').filter(c => c.trim());
-            else if (sep === 'comma') cells = line.split(',').map(c => c.trim());
-            else if (sep === 'semicolon') cells = line.split(';').map(c => c.trim());
-            else cells = line.split(/\s{2,}/).map(c => c.trim());
-            return cells.filter(c => c.length > 0);
+            else if (sep === 'pipe') cells = line.split('|').filter(function(c) { return c.trim(); });
+            else if (sep === 'comma') cells = line.split(',').map(function(c) { return c.trim(); });
+            else if (sep === 'semicolon') cells = line.split(';').map(function(c) { return c.trim(); });
+            else cells = line.split(/\s{2,}/).map(function(c) { return c.trim(); });
+            return cells.filter(function(c) { return c.length > 0; });
         });
         
-        const filtered = table.filter(row => row.length > 0);
+        var filtered = table.filter(function(row) { return row.length > 0; });
         if (filtered.length > 0) {
-            const maxCols = Math.max(...filtered.map(row => row.length));
-            return filtered.map(row => {
+            var maxCols = Math.max.apply(null, filtered.map(function(row) { return row.length; }));
+            return filtered.map(function(row) {
                 while (row.length < maxCols) row.push('');
                 return row;
             });
         }
     }
     
-    // 2. Intentar detección por espacios (sin líneas)
-    const spacedTable = detectTableBySpacing(text);
+    var spacedTable = detectTableBySpacing(text);
     if (spacedTable && spacedTable.length > 1) {
         return spacedTable;
     }
     
-    // 3. Fallback: dividir por espacios múltiples
-    const fallback = lines.map(line => {
-        const parts = line.split(/\s{2,}/).map(c => c.trim());
+    var fallback = lines.map(function(line) {
+        var parts = line.split(/\s{2,}/).map(function(c) { return c.trim(); });
         return parts.length > 1 ? parts : [line];
     });
     
-    const filtered = fallback.filter(row => row.length > 0);
-    if (filtered.length > 0) {
-        const maxCols = Math.max(...filtered.map(row => row.length));
-        return filtered.map(row => {
-            while (row.length < maxCols) row.push('');
+    var filtered2 = fallback.filter(function(row) { return row.length > 0; });
+    if (filtered2.length > 0) {
+        var maxCols2 = Math.max.apply(null, filtered2.map(function(row) { return row.length; }));
+        return filtered2.map(function(row) {
+            while (row.length < maxCols2) row.push('');
             return row;
         });
     }
@@ -404,20 +414,26 @@ function parseTable(text) {
 }
 
 function detectSeparator(lines) {
-    const counts = { tab: 0, pipe: 0, comma: 0, semicolon: 0 };
-    const sample = lines.slice(0, Math.min(lines.length, 10));
+    var counts = { tab: 0, pipe: 0, comma: 0, semicolon: 0 };
+    var sample = lines.slice(0, Math.min(lines.length, 10));
     
-    for (const line of sample) {
+    for (var i = 0; i < sample.length; i++) {
+        var line = sample[i];
         if (line.includes('\t')) counts.tab++;
         if (line.includes('|')) counts.pipe++;
         if (line.includes(',')) counts.comma++;
         if (line.includes(';')) counts.semicolon++;
     }
     
-    let max = 0;
-    let best = 'spaces';
-    for (const [key, val] of Object.entries(counts)) {
-        if (val > max) { max = val; best = key; }
+    var max = 0;
+    var best = 'spaces';
+    var keys = Object.keys(counts);
+    for (var k = 0; k < keys.length; k++) {
+        var key = keys[k];
+        if (counts[key] > max) {
+            max = counts[key];
+            best = key;
+        }
     }
     return max > 0 ? best : 'spaces';
 }
@@ -427,37 +443,37 @@ function detectSeparator(lines) {
 // ============================================================
 
 async function extractCellsWithOCR(imageData, cells) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
     canvas.width = imageData.width;
     canvas.height = imageData.height;
     ctx.putImageData(imageData, 0, 0);
     
-    const tableData = [];
-    const padding = 5;
+    var tableData = [];
+    var padding = 5;
     
-    for (let row = 0; row < cells.length - 1; row++) {
-        const rowData = [];
-        for (let col = 0; col < cells[row].length - 1; col++) {
-            const x1 = cells[row][col].x + padding;
-            const y1 = cells[row][col].y + padding;
-            const x2 = cells[row][col + 1].x - padding;
-            const y2 = cells[row + 1][col].y - padding;
+    for (var row = 0; row < cells.length - 1; row++) {
+        var rowData = [];
+        for (var col = 0; col < cells[row].length - 1; col++) {
+            var x1 = cells[row][col].x + padding;
+            var y1 = cells[row][col].y + padding;
+            var x2 = cells[row][col + 1].x - padding;
+            var y2 = cells[row + 1][col].y - padding;
             
             if (x2 <= x1 || y2 <= y1) {
                 rowData.push('');
                 continue;
             }
             
-            const cellCanvas = document.createElement('canvas');
+            var cellCanvas = document.createElement('canvas');
             cellCanvas.width = x2 - x1;
             cellCanvas.height = y2 - y1;
-            const cellCtx = cellCanvas.getContext('2d');
+            var cellCtx = cellCanvas.getContext('2d');
             cellCtx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1);
             
             try {
-                const cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
-                const text = await recognizeCell(cellImageData);
+                var cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
+                var text = await recognizeCell(cellImageData);
                 rowData.push(text);
             } catch (e) {
                 console.warn('Error en celda:', e);
@@ -473,18 +489,18 @@ async function extractCellsWithOCR(imageData, cells) {
 }
 
 async function recognizeCell(imageData) {
-    const canvas = document.createElement('canvas');
+    var canvas = document.createElement('canvas');
     canvas.width = imageData.width;
     canvas.height = imageData.height;
-    const ctx = canvas.getContext('2d');
+    var ctx = canvas.getContext('2d');
     ctx.putImageData(imageData, 0, 0);
     
     if (canvas.width < 10 || canvas.height < 10) return '';
     
-    const imageUrl = canvas.toDataURL('image/png');
+    var imageUrl = canvas.toDataURL('image/png');
     try {
-        const { data: { text } } = await worker.recognize(imageUrl);
-        return text.trim();
+        var result = await worker.recognize(imageUrl);
+        return result.data.text.trim();
     } catch (e) {
         console.warn('OCR error:', e);
         return '';
@@ -492,7 +508,7 @@ async function recognizeCell(imageData) {
 }
 
 // ============================================================
-//  PROCESAR IMAGEN COMPLETO
+//  PROCESAR IMAGEN COMPLETO CON MANEJO DE ERRORES
 // ============================================================
 
 async function processImage() {
@@ -503,7 +519,7 @@ async function processImage() {
 
     if (!tesseractReady) {
         setStatus('⏳ Cargando OCR...', 'warning');
-        const ready = await initTesseract();
+        var ready = await initTesseract();
         if (!ready) return;
     }
 
@@ -515,71 +531,105 @@ async function processImage() {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
 
-        const img = new Image();
+        var img = new Image();
         img.src = await fileToBase64(currentImageFile);
         await img.decode();
-        
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // ===== PRIMERO: DETECTAR LÍNEAS =====
         showProgress(true, 25);
         setStatus('📐 Detectando líneas...', 'info');
 
-        const { horizontalLines, verticalLines, intersections } = detectLines(imageData);
-        
-        let tableDataResult = null;
-        
+        var intersections = [];
+        var cells = [];
+        var tableDataResult = null;
+
+        try {
+            var linesResult = detectLines(imageData);
+            intersections = linesResult.intersections || [];
+        } catch (e) {
+            console.warn('⚠️ Error en detectLines:', e);
+            intersections = [];
+        }
+
         if (intersections.length >= 4) {
-            showProgress(true, 50);
-            setStatus('📊 Identificando celdas por líneas...', 'info');
-            
-            const cells = detectCells(intersections);
-            
-            if (cells.length >= 2) {
-                showProgress(true, 65);
-                setStatus('🔍 Leyendo cada celda...', 'info');
-                tableDataResult = await extractCellsWithOCR(imageData, cells);
+            try {
+                showProgress(true, 50);
+                setStatus('📊 Identificando celdas por líneas...', 'info');
+                cells = detectCells(intersections);
+            } catch (e) {
+                console.warn('⚠️ Error en detectCells:', e);
+                cells = [];
+            }
+
+            if (cells && cells.length >= 2) {
+                try {
+                    showProgress(true, 65);
+                    setStatus('🔍 Leyendo cada celda...', 'info');
+                    tableDataResult = await extractCellsWithOCR(imageData, cells);
+                } catch (e) {
+                    console.warn('⚠️ Error en extractCellsWithOCR:', e);
+                    tableDataResult = null;
+                }
             }
         }
-        
-        // ===== SEGUNDO: SI NO HAY LÍNEAS, USAR OCR GENERAL + DETECCIÓN POR ESPACIOS =====
+
         if (!tableDataResult || tableDataResult.length === 0) {
             showProgress(true, 50);
-            setStatus('📄 No se detectaron líneas. Usando OCR + detección por espacios...', 'warning');
-            
-            const { data: { text } } = await worker.recognize(imageData);
-            showOcrResult(text);
-            
-            const parsed = parseTable(text);
-            
-            if (parsed && parsed.length > 1) {
-                tableDataResult = parsed;
-                setStatus(`✅ Tabla detectada por espacios (${tableDataResult.length} filas)`, 'success');
-            } else {
-                // Último recurso: mostrar texto como tabla simple
-                const lines = text.split('\n').filter(l => l.trim());
+            setStatus('📄 Usando OCR general + detección por espacios...', 'warning');
+
+            var text = '';
+            try {
+                var result = await worker.recognize(imageData);
+                text = result.data.text || '';
+            } catch (e) {
+                console.warn('⚠️ Error en OCR general:', e);
+                text = '';
+            }
+
+            if (text) {
+                showOcrResult(text);
+                try {
+                    var parsed = parseTable(text);
+                    if (parsed && parsed.length > 1) {
+                        tableDataResult = parsed;
+                        setStatus('✅ Tabla detectada por espacios (' + tableDataResult.length + ' filas)', 'success');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Error en parseTable:', e);
+                    tableDataResult = null;
+                }
+            }
+
+            if (!tableDataResult || tableDataResult.length === 0) {
+                var lines = text ? text.split('\n').filter(function(l) { return l.trim(); }) : [];
                 if (lines.length > 0) {
-                    tableDataResult = [['Texto extraído'], ...lines.map(l => [l])];
+                    tableDataResult = [['Texto extraído']];
+                    for (var i = 0; i < lines.length; i++) {
+                        tableDataResult.push([lines[i]]);
+                    }
                     setStatus('⚠️ No se detectó tabla. Mostrando texto.', 'warning');
                 }
             }
         }
-        
+
         showProgress(true, 90);
         setStatus('📋 Reconstruyendo tabla...', 'info');
 
         if (tableDataResult && tableDataResult.length > 0) {
-            const cleanData = tableDataResult.filter(row => row.some(cell => cell.length > 0));
+            var cleanData = tableDataResult.filter(function(row) {
+                return row && row.some(function(cell) { return cell && cell.length > 0; });
+            });
             if (cleanData.length > 0) {
                 tableData = cleanData;
                 renderTable(tableData);
-                const cols = tableData[0]?.length || 0;
-                setStatus(`✅ Tabla extraída (${tableData.length} filas, ${cols} columnas)`, 'success');
+                var cols = tableData[0] ? tableData[0].length : 0;
+                setStatus('✅ Tabla extraída (' + tableData.length + ' filas, ' + cols + ' columnas)', 'success');
                 downloadBtn.disabled = false;
                 copyBtn.disabled = false;
                 updateCellCount();
@@ -592,12 +642,12 @@ async function processImage() {
 
         showProgress(true, 100);
     } catch (error) {
-        console.error('Error:', error);
-        setStatus(`❌ Error: ${error.message}`, 'error');
+        console.error('❌ Error en processImage:', error);
+        setStatus('❌ Error: ' + (error.message || 'undefined'), 'error');
     } finally {
         isProcessing = false;
         processBtn.disabled = false;
-        setTimeout(() => showProgress(false), 1500);
+        setTimeout(function() { showProgress(false); }, 1500);
     }
 }
 
@@ -608,25 +658,28 @@ async function processImage() {
 function renderTable(data) {
     if (!data || data.length === 0) data = [['Sin datos']];
 
-    const maxCols = Math.max(...data.map(row => row.length));
-    data = data.map(row => {
+    var maxCols = 0;
+    for (var i = 0; i < data.length; i++) {
+        if (data[i].length > maxCols) maxCols = data[i].length;
+    }
+    data = data.map(function(row) {
         while (row.length < maxCols) row.push('');
         return row;
     });
 
     tableData = data;
 
-    let html = '<thead><tr>';
-    for (let j = 0; j < data[0].length; j++) {
-        html += `<th>${escapeHtml(data[0][j] || `Col ${j+1}`)}</th>`;
+    var html = '<thead><tr>';
+    for (var j = 0; j < data[0].length; j++) {
+        html += '<th>' + escapeHtml(data[0][j] || 'Col ' + (j+1)) + '</th>';
     }
     html += '</tr></thead>';
 
     html += '<tbody>';
-    for (let i = 1; i < data.length; i++) {
+    for (var r = 1; r < data.length; r++) {
         html += '<tr>';
-        for (let j = 0; j < data[i].length; j++) {
-            html += `<td data-row="${i}" data-col="${j}">${escapeHtml(data[i][j] || '')}</td>`;
+        for (var c = 0; c < data[r].length; c++) {
+            html += '<td data-row="' + r + '" data-col="' + c + '">' + escapeHtml(data[r][c] || '') + '</td>';
         }
         html += '</tr>';
     }
@@ -638,15 +691,16 @@ function renderTable(data) {
 }
 
 function enableEditing() {
-    const cells = resultTable.querySelectorAll('td');
-    cells.forEach(cell => {
-        cell.addEventListener('dblclick', () => {
-            const row = parseInt(cell.dataset.row);
-            const col = parseInt(cell.dataset.col);
+    var cells = resultTable.querySelectorAll('td');
+    for (var i = 0; i < cells.length; i++) {
+        var cell = cells[i];
+        cell.addEventListener('dblclick', function() {
+            var row = parseInt(this.dataset.row);
+            var col = parseInt(this.dataset.col);
             if (isNaN(row) || isNaN(col)) return;
 
-            const original = cell.textContent;
-            const input = document.createElement('input');
+            var original = this.textContent;
+            var input = document.createElement('input');
             input.type = 'text';
             input.value = original;
             input.style.width = '100%';
@@ -654,14 +708,15 @@ function enableEditing() {
             input.style.borderRadius = '4px';
             input.style.padding = '4px';
 
-            cell.textContent = '';
-            cell.appendChild(input);
+            this.textContent = '';
+            this.appendChild(input);
             input.focus();
             input.select();
 
-            const save = () => {
-                const val = input.value;
-                cell.textContent = val || ' ';
+            var self = this;
+            var save = function() {
+                var val = input.value;
+                self.textContent = val || ' ';
                 if (tableData[row] && tableData[row][col] !== undefined) {
                     tableData[row][col] = val;
                 }
@@ -669,12 +724,12 @@ function enableEditing() {
             };
 
             input.addEventListener('blur', save);
-            input.addEventListener('keydown', (e) => {
+            input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-                if (e.key === 'Escape') { cell.textContent = original; input.remove(); }
+                if (e.key === 'Escape') { self.textContent = original; input.remove(); }
             });
         });
-    });
+    }
 }
 
 // ============================================================
@@ -683,14 +738,18 @@ function enableEditing() {
 
 function addRow() {
     if (!tableData || tableData.length === 0) tableData = [['Nueva fila']];
-    const cols = tableData[0]?.length || 1;
-    tableData.push(new Array(cols).fill(''));
+    var cols = tableData[0] ? tableData[0].length : 1;
+    var newRow = [];
+    for (var i = 0; i < cols; i++) newRow.push('');
+    tableData.push(newRow);
     renderTable(tableData);
 }
 
 function addColumn() {
     if (!tableData || tableData.length === 0) tableData = [['Nueva columna']];
-    tableData.forEach(row => row.push(''));
+    for (var i = 0; i < tableData.length; i++) {
+        tableData[i].push('');
+    }
     renderTable(tableData);
 }
 
@@ -713,14 +772,22 @@ function exportCSV() {
         return;
     }
 
-    const csv = tableData
-        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-        .join('\n');
+    var csv = '';
+    for (var i = 0; i < tableData.length; i++) {
+        var row = tableData[i];
+        var rowStr = '';
+        for (var j = 0; j < row.length; j++) {
+            var cell = String(row[j] || '').replace(/"/g, '""');
+            if (j > 0) rowStr += ',';
+            rowStr += '"' + cell + '"';
+        }
+        csv += rowStr + '\n';
+    }
 
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
+    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `tabla_${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = 'tabla_' + new Date().toISOString().slice(0,10) + '.csv';
     link.click();
     setStatus('📥 CSV descargado', 'success');
 }
@@ -731,17 +798,22 @@ function copyTable() {
         return;
     }
 
-    const text = tableData.map(row => row.join('\t')).join('\n');
+    var text = '';
+    for (var i = 0; i < tableData.length; i++) {
+        text += tableData[i].join('\t') + '\n';
+    }
+
     navigator.clipboard.writeText(text)
-        .catch(() => {
-            const ta = document.createElement('textarea');
+        .then(function() { setStatus('📋 Tabla copiada', 'success'); })
+        .catch(function() {
+            var ta = document.createElement('textarea');
             ta.value = text;
             document.body.appendChild(ta);
             ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
+            setStatus('📋 Tabla copiada', 'success');
         });
-    setStatus('📋 Tabla copiada', 'success');
 }
 
 // ============================================================
@@ -749,31 +821,34 @@ function copyTable() {
 // ============================================================
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
 function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(reader.error); };
         reader.readAsDataURL(file);
     });
 }
 
 function updateCellCount() {
-    const count = tableData.reduce((sum, row) => sum + row.length, 0);
-    cellCount.textContent = `${count} celdas`;
+    var count = 0;
+    for (var i = 0; i < tableData.length; i++) {
+        count += tableData[i].length;
+    }
+    cellCount.textContent = count + ' celdas';
 }
 
 // ============================================================
 //  EVENTOS
 // ============================================================
 
-dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => {
+dropZone.addEventListener('click', function() { fileInput.click(); });
+fileInput.addEventListener('change', function(e) {
     if (e.target.files.length > 0) handleFile(e.target.files[0]);
 });
 
@@ -790,8 +865,8 @@ clearBtn.addEventListener('click', clearTable);
 
 setStatus('📸 Sube una captura de pantalla', 'info');
 
-setTimeout(async () => {
-    await initTesseract();
+setTimeout(function() {
+    initTesseract();
 }, 1000);
 
 console.log('📊 Lector de Tablas - Detección Híbrida (Líneas + Espacios)');

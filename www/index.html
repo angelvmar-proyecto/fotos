@@ -5,13 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>📊 Lector de Tablas</title>
     <style>
-        /* ===== RESET Y BASE ===== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
             background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
@@ -21,8 +15,6 @@
             justify-content: center;
             align-items: flex-start;
         }
-
-        /* ===== CONTENEDOR PRINCIPAL ===== */
         .container {
             max-width: 800px;
             width: 100%;
@@ -32,24 +24,8 @@
             padding: 24px 20px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
         }
-
-        /* ===== HEADER ===== */
-        h1 {
-            text-align: center;
-            color: #1a202c;
-            font-size: 1.6rem;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .subtitle {
-            text-align: center;
-            color: #4a5568;
-            font-size: 0.9rem;
-            margin-bottom: 20px;
-        }
-
-        /* ===== STATUS DE CARGA ===== */
+        h1 { text-align: center; color: #1a202c; font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+        .subtitle { text-align: center; color: #4a5568; font-size: 0.9rem; margin-bottom: 20px; }
         #statusLoading {
             background: #fef3c7;
             padding: 10px 14px;
@@ -61,8 +37,6 @@
             margin-bottom: 12px;
             border-left: 4px solid #f59e0b;
         }
-
-        /* ===== ÁREA DE SUBIDA ===== */
         .upload-area {
             border: 3px dashed #25D366;
             border-radius: 16px;
@@ -73,35 +47,11 @@
             transition: background 0.2s ease, transform 0.1s ease;
             margin-bottom: 16px;
         }
-
-        .upload-area:active {
-            transform: scale(0.97);
-            background: #dcfce7;
-        }
-
-        .upload-area .icon {
-            font-size: 3rem;
-            display: block;
-            margin-bottom: 6px;
-        }
-
-        .upload-area h3 {
-            color: #1a202c;
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .upload-area p {
-            color: #718096;
-            font-size: 0.85rem;
-            margin-top: 4px;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        /* ===== VISTA PREVIA ===== */
+        .upload-area:active { transform: scale(0.97); background: #dcfce7; }
+        .upload-area .icon { font-size: 3rem; display: block; margin-bottom: 6px; }
+        .upload-area h3 { color: #1a202c; font-size: 1.1rem; font-weight: 600; }
+        .upload-area p { color: #718096; font-size: 0.85rem; margin-top: 4px; }
+        #fileInput { display: none; }
         #previewImage {
             max-width: 100%;
             max-height: 320px;
@@ -111,15 +61,12 @@
             border: 2px solid #25D366;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-
-        /* ===== CONTROLES PRINCIPALES ===== */
         .controls {
             display: flex;
             gap: 10px;
             margin: 12px 0 16px 0;
             flex-wrap: wrap;
         }
-
         .controls button {
             flex: 1;
             padding: 12px 8px;
@@ -132,27 +79,11 @@
             min-width: 70px;
             color: white;
         }
-
-        .controls button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .controls button:active:not(:disabled) {
-            transform: scale(0.96);
-        }
-
-        .btn-primary {
-            background: #25D366;
-        }
-        .btn-success {
-            background: #128C7E;
-        }
-        .btn-info {
-            background: #075E54;
-        }
-
-        /* ===== BARRA DE PROGRESO ===== */
+        .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .controls button:active:not(:disabled) { transform: scale(0.96); }
+        .btn-primary { background: #25D366; }
+        .btn-success { background: #128C7E; }
+        .btn-info { background: #075E54; }
         .progress-bar {
             height: 20px;
             background: #e5e7eb;
@@ -161,7 +92,6 @@
             margin: 10px 0 14px 0;
             display: none;
         }
-
         .progress-fill {
             height: 100%;
             width: 0%;
@@ -169,8 +99,6 @@
             border-radius: 12px;
             transition: width 0.3s ease;
         }
-
-        /* ===== STATUS ===== */
         .status {
             padding: 10px 14px;
             border-radius: 10px;
@@ -179,25 +107,10 @@
             font-size: 0.9rem;
             font-weight: 500;
         }
-
-        .status-info {
-            background: #dbeafe;
-            color: #1e3a8a;
-        }
-        .status-success {
-            background: #dcfce7;
-            color: #166534;
-        }
-        .status-error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-        .status-warning {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        /* ===== RESULTADO OCR ===== */
+        .status-info { background: #dbeafe; color: #1e3a8a; }
+        .status-success { background: #dcfce7; color: #166534; }
+        .status-error { background: #fee2e2; color: #991b1b; }
+        .status-warning { background: #fef3c7; color: #92400e; }
         .ocr-result {
             background: #0d1117;
             color: #00ff41;
@@ -213,8 +126,6 @@
             display: none;
             border: 1px solid #00ff41;
         }
-
-        /* ===== TOOLBAR ===== */
         .toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -222,7 +133,6 @@
             margin: 10px 0 12px 0;
             align-items: center;
         }
-
         .toolbar button {
             padding: 8px 16px;
             border: none;
@@ -233,21 +143,10 @@
             color: white;
             transition: transform 0.1s;
         }
-
-        .toolbar button:active {
-            transform: scale(0.95);
-        }
-
-        .btn-row {
-            background: #34D399;
-        }
-        .btn-col {
-            background: #60A5FA;
-        }
-        .btn-clear {
-            background: #F87171;
-        }
-
+        .toolbar button:active { transform: scale(0.95); }
+        .btn-row { background: #34D399; }
+        .btn-col { background: #60A5FA; }
+        .btn-clear { background: #F87171; }
         .badge {
             background: #075E54;
             color: white;
@@ -257,8 +156,6 @@
             font-weight: 600;
             margin-left: auto;
         }
-
-        /* ===== TABLA DE RESULTADOS ===== */
         .table-container {
             overflow-x: auto;
             margin: 14px 0 0 0;
@@ -267,19 +164,12 @@
             max-height: 420px;
             overflow-y: auto;
         }
-
         #resultTable {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.85rem;
         }
-
-        #resultTable thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-
+        #resultTable thead { position: sticky; top: 0; z-index: 10; }
         #resultTable th {
             background: #075E54;
             color: white;
@@ -287,82 +177,33 @@
             text-align: left;
             font-weight: 600;
         }
-
         #resultTable td {
             padding: 8px 12px;
             border-bottom: 1px solid #e5e7eb;
             min-height: 36px;
             word-break: break-word;
         }
-
-        #resultTable tr:nth-child(even) {
-            background: #f8fafc;
-        }
-
-        #resultTable tr:hover {
-            background: #e6f7e6;
-        }
-
-        #resultTable td[contenteditable="true"] {
-            cursor: text;
-        }
-
-        /* ===== RESPONSIVE ===== */
+        #resultTable tr:nth-child(even) { background: #f8fafc; }
+        #resultTable tr:hover { background: #e6f7e6; }
         @media (max-width: 480px) {
-            .container {
-                padding: 16px 12px;
-            }
-
-            h1 {
-                font-size: 1.3rem;
-            }
-
-            .controls button {
-                font-size: 0.75rem;
-                padding: 10px 4px;
-            }
-
-            .upload-area {
-                padding: 20px 12px;
-            }
-
-            .upload-area .icon {
-                font-size: 2.4rem;
-            }
-
-            .toolbar button {
-                font-size: 0.7rem;
-                padding: 6px 12px;
-            }
-
-            .badge {
-                font-size: 0.65rem;
-                padding: 2px 10px;
-            }
-
-            #resultTable {
-                font-size: 0.75rem;
-            }
-
-            #resultTable th,
-            #resultTable td {
-                padding: 6px 8px;
-            }
+            .container { padding: 16px 12px; }
+            h1 { font-size: 1.3rem; }
+            .controls button { font-size: 0.75rem; padding: 10px 4px; }
+            .upload-area { padding: 20px 12px; }
+            .upload-area .icon { font-size: 2.4rem; }
+            .toolbar button { font-size: 0.7rem; padding: 6px 12px; }
+            .badge { font-size: 0.65rem; padding: 2px 10px; }
+            #resultTable { font-size: 0.75rem; }
+            #resultTable th, #resultTable td { padding: 6px 8px; }
         }
     </style>
 </head>
 <body>
-
     <div class="container">
-
-        <!-- ===== TÍTULO ===== -->
         <h1>📊 Lector de Tablas</h1>
         <p class="subtitle">Sube una captura de pantalla de Excel o WhatsApp</p>
-
-        <!-- ===== CARGA ===== -->
         <div id="statusLoading">⏳ Cargando OCR...</div>
 
-        <!-- ===== SUBIDA ===== -->
         <div class="upload-area" id="dropZone">
             <span class="icon">📸</span>
             <h3>Toca para subir captura</h3>
@@ -370,28 +211,21 @@
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
-        <!-- ===== VISTA PREVIA ===== -->
         <img id="previewImage" alt="Vista previa de la imagen">
 
-        <!-- ===== CONTROLES ===== -->
         <div class="controls">
             <button id="processBtn" class="btn-primary" disabled>🔍 Extraer</button>
             <button id="downloadBtn" class="btn-success" disabled>📥 CSV</button>
             <button id="copyBtn" class="btn-info" disabled>📋 Copiar</button>
         </div>
 
-        <!-- ===== PROGRESO ===== -->
         <div class="progress-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
 
-        <!-- ===== STATUS ===== -->
         <div id="status" class="status status-info">📸 Sube una captura de pantalla</div>
-
-        <!-- ===== TEXTO OCR ===== -->
         <div class="ocr-result" id="ocrResult"></div>
 
-        <!-- ===== TOOLBAR ===== -->
         <div class="toolbar">
             <button class="btn-row" id="addRowBtn">➕ Fila</button>
             <button class="btn-col" id="addColBtn">➕ Columna</button>
@@ -399,31 +233,15 @@
             <span class="badge" id="cellCount">0 celdas</span>
         </div>
 
-        <!-- ===== TABLA ===== -->
         <div class="table-container">
             <table id="resultTable">
-                <thead>
-                    <tr>
-                        <th>📝 Toca dos veces para editar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Sube una captura para extraer la tabla</td>
-                    </tr>
-                </tbody>
+                <thead><tr><th>📝 Toca dos veces para editar</th></tr></thead>
+                <tbody><tr><td>Sube una captura para extraer la tabla</td></tr></tbody>
             </table>
         </div>
-
     </div>
 
-    <!-- ===== TESSERACT.JS (CDN) ===== -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js">
-    </script>
-
-    <!-- ===== APP.JS ===== -->
-    <script src="app.js">
-    </script>
-
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
