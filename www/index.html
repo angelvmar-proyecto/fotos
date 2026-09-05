@@ -64,7 +64,6 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         
-        /* ===== BOTONES DE MODO ===== */
         .modos-container {
             display: flex;
             gap: 8px;
@@ -258,7 +257,6 @@
 
         <div id="statusLoading">⏳ Cargando OCR...</div>
 
-        <!-- ===== ÁREA DE SUBIDA ===== -->
         <div class="upload-area" id="dropZone">
             <span class="icon">📸</span>
             <h3>Toca para subir captura</h3>
@@ -268,7 +266,6 @@
 
         <img id="previewImage" alt="Vista previa de la imagen">
 
-        <!-- ===== BOTONES DE MODO ===== -->
         <div class="modos-container">
             <button id="modoLineasBtn" class="active">🔍 Líneas</button>
             <button id="modoEspaciosBtn">📊 Espacios</button>
@@ -278,25 +275,20 @@
             <span id="modoActualLabel">Modo: 🔍 Líneas (detección por bordes)</span>
         </div>
 
-        <!-- ===== CONTROLES PRINCIPALES ===== -->
         <div class="controls">
             <button id="processBtn" class="btn-primary" disabled>🔍 Extraer</button>
             <button id="downloadBtn" class="btn-success" disabled>📥 CSV</button>
             <button id="copyBtn" class="btn-info" disabled>📋 Copiar</button>
         </div>
 
-        <!-- ===== PROGRESO ===== -->
         <div class="progress-bar" id="progressBar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
 
-        <!-- ===== STATUS ===== -->
         <div id="status" class="status status-info">📸 Sube una captura de pantalla</div>
 
-        <!-- ===== TEXTO OCR ===== -->
         <div class="ocr-result" id="ocrResult"></div>
 
-        <!-- ===== TOOLBAR ===== -->
         <div class="toolbar">
             <button class="btn-row" id="addRowBtn">➕ Fila</button>
             <button class="btn-col" id="addColBtn">➕ Columna</button>
@@ -304,7 +296,6 @@
             <span class="badge" id="cellCount">0 celdas</span>
         </div>
 
-        <!-- ===== TABLA ===== -->
         <div class="table-container">
             <table id="resultTable">
                 <thead>
@@ -318,7 +309,6 @@
 
     </div>
 
-    <!-- Tesseract.js desde CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
 </body>

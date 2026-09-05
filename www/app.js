@@ -1,21 +1,13 @@
 // ============================================================
-//  LECTOR DE TABLAS - ML KIT NATIVO (HÍBRIDO)
-//  Carga de imágenes SIMPLE (como antes) + OCR nativo
+//  LECTOR DE TABLAS - CON TESSERACT.JS (FUNCIONAL)
+//  3 MODOS DE EXTRACCIÓN: Líneas, Espacios, Patrón
 // ============================================================
-
-// ===== IMPORTAR ML KIT (SIN ROMPER LA APP) =====
-let CapacitorOcr = null;
-try {
-    CapacitorOcr = Capacitor.Plugins.Ocr;
-    console.log("✅ ML Kit OCR disponible");
-} catch (e) {
-    console.warn("⚠️ ML Kit OCR no disponible:", e);
-}
 
 let currentImageFile = null;
 let tableData = [];
+let worker = null;
 let isProcessing = false;
-let ocrReady = false;
+let tesseractReady = false;
 let modoActual = 'lineas';
 
 // ===== DOM REFERENCIAS =====
@@ -91,7 +83,7 @@ function setModo(modo) {
 }
 
 // ============================================================
-//  MANEJO DE IMÁGENES (ESTILO SIMPLE QUE FUNCIONABA)
+//  MANEJO DE IMÁGENES (SIMPLE Y FUNCIONAL)
 // ============================================================
 
 function handleFile(file) {
@@ -120,83 +112,62 @@ function handleFile(file) {
 }
 
 // ============================================================
-//  INICIALIZAR ML KIT OCR (SIN ROMPER NADA)
+//  INICIALIZAR TESSERACT
 // ============================================================
 
-async function initOCR() {
+async function initTesseract() {
     try {
-        console.log("🔄 Inicializando ML Kit OCR...");
-        setStatus('⏳ Inicializando OCR...', 'info');
+        console.log("🔄 Iniciando Tesseract...");
+        setStatus('⏳ Cargando OCR...', 'info');
         statusLoading.style.display = 'block';
-        statusLoading.textContent = '⏳ Inicializando OCR...';
-        showProgress(true, 10);
+        statusLoading.textContent = '⏳ Cargando OCR...';
+        showProgress(true, 5);
 
-        if (!CapacitorOcr) {
-            throw new Error('ML Kit OCR no está disponible');
+        if (typeof Tesseract === 'undefined') {
+            throw new Error('Tesseract no está disponible. Revisa tu conexión.');
         }
 
-        ocrReady = true;
-        statusLoading.style.display = 'none';
-        setStatus('✅ OCR nativo listo.', 'success');
+        worker = await Tesseract.createWorker('spa', 1, {
+            logger: function(m) {
+                console.log("📊 Progreso:", m.status, m.progress || '');
+                if (m.status === 'loading tesseract core') {
+                    showProgress(true, 20);
+                    statusLoading.textContent = '📦 Cargando motor OCR...';
+                } else if (m.status === 'loading language traineddata') {
+                    showProgress(true, 50);
+                    var pct = Math.round((m.progress || 0) * 100);
+                    statusLoading.textContent = '📚 Cargando idioma español (' + pct + '%)...';
+                } else if (m.status === 'initializing api') {
+                    showProgress(true, 75);
+                    statusLoading.textContent = '🚀 Inicializando...';
+                } else if (m.status === 'recognizing text') {
+                    var pct = Math.round(75 + (m.progress * 25));
+                    showProgress(true, pct);
+                    statusLoading.textContent = '🔍 Reconociendo... ' + pct + '%';
+                }
+            }
+        });
+
+        await worker.setParameters({
+            tessedit_pageseg_mode: 6,
+            tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:;%$€£@#+-/() '
+        });
+
         showProgress(true, 100);
+        tesseractReady = true;
+        statusLoading.style.display = 'none';
+        setStatus('✅ OCR listo.', 'success');
         setTimeout(function() { showProgress(false); }, 1000);
-        console.log("✅ ML Kit OCR listo");
+        console.log("✅ Tesseract cargado correctamente");
         return true;
     } catch (error) {
-        console.error('❌ Error initOCR:', error);
+        console.error('❌ Error en Tesseract:', error);
         statusLoading.style.display = 'block';
         statusLoading.textContent = '❌ Error: ' + error.message;
         setStatus('❌ Error: ' + error.message, 'error');
         showProgress(false);
-        ocrReady = false;
+        tesseractReady = false;
         return false;
-    }
-}
-
-// ============================================================
-//  OCR CON ML KIT
-// ============================================================
-
-async function reconocerTexto(imageData) {
-    try {
-        console.log("📸 Enviando imagen a ML Kit OCR...");
-        
-        var canvas = document.createElement('canvas');
-        canvas.width = imageData.width;
-        canvas.height = imageData.height;
-        var ctx = canvas.getContext('2d');
-        ctx.putImageData(imageData, 0, 0);
-        
-        var base64ConPrefijo = canvas.toDataURL('image/jpeg', 0.9);
-        var base64Data = base64ConPrefijo.split(',')[1];
-        
-        const result = await CapacitorOcr.processImage({
-            image: {
-                path: base64Data,
-                format: 'image/jpeg'
-            },
-            language: 'es'
-        });
-        
-        console.log("✅ OCR completado. Bloques:", result.blocks ? result.blocks.length : 0);
-        
-        if (!result.blocks) {
-            return '';
-        }
-        
-        var textoCompleto = '';
-        for (var i = 0; i < result.blocks.length; i++) {
-            if (result.blocks[i].lines) {
-                for (var j = 0; j < result.blocks[i].lines.length; j++) {
-                    textoCompleto += result.blocks[i].lines[j].text + '\n';
-                }
-            }
-        }
-        
-        return textoCompleto;
-    } catch (error) {
-        console.error('❌ Error en OCR:', error);
-        return '';
     }
 }
 
@@ -341,8 +312,8 @@ async function extraerPorLineas(imageData) {
             
             try {
                 var cellImageData = cellCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
-                var text = await reconocerTexto(cellImageData);
-                rowData.push(text.trim());
+                var result = await worker.recognize(cellImageData);
+                rowData.push(result.data.text.trim());
             } catch (e) {
                 rowData.push('');
             }
@@ -480,7 +451,7 @@ function parsearPorPatron(texto) {
 }
 
 // ============================================================
-//  PROCESAR IMAGEN (ESTILO SIMPLE QUE FUNCIONABA)
+//  PROCESAR IMAGEN (CON TESSERACT)
 // ============================================================
 
 async function processImage() {
@@ -491,9 +462,9 @@ async function processImage() {
         return;
     }
 
-    if (!ocrReady) {
-        setStatus('⏳ Inicializando OCR...', 'warning');
-        var ready = await initOCR();
+    if (!tesseractReady) {
+        setStatus('⏳ Cargando OCR...', 'warning');
+        var ready = await initTesseract();
         if (!ready) return;
     }
 
@@ -508,7 +479,6 @@ async function processImage() {
         showProgress(true, 5);
         setStatus('🔍 Procesando imagen...', 'info');
 
-        // Cargar imagen (como siempre funcionó)
         var img = new Image();
         img.src = currentImageFile;
         await new Promise(function(resolve, reject) {
@@ -526,10 +496,10 @@ async function processImage() {
         showProgress(true, 30);
         setStatus('📸 Aplicando OCR...', 'info');
 
-        // OCR con ML Kit
         try {
-            text = await reconocerTexto(imageData);
-            console.log("✅ OCR completado. Longitud:", text ? text.length : 0);
+            var result = await worker.recognize(imageData);
+            text = result.data.text || '';
+            console.log("✅ OCR completado. Longitud:", text.length);
             
             if (text && text.length > 0) {
                 showOcrResult(text);
@@ -554,7 +524,6 @@ async function processImage() {
 
         showProgress(true, 50);
 
-        // Modo 1: Líneas
         if (modoActual === 'lineas') {
             try {
                 tableDataResult = await extraerPorLineas(imageData);
@@ -566,7 +535,6 @@ async function processImage() {
             }
         }
 
-        // Modo 2: Espacios
         if ((!tableDataResult || tableDataResult.length === 0) && modoActual === 'espacios') {
             try {
                 var parsed = detectTableBySpacing(text);
@@ -579,7 +547,6 @@ async function processImage() {
             }
         }
 
-        // Modo 3: Patrón
         if ((!tableDataResult || tableDataResult.length === 0) && modoActual === 'patron') {
             try {
                 var parsed = parsearPorPatron(text);
@@ -592,7 +559,6 @@ async function processImage() {
             }
         }
 
-        // Mostrar resultados
         if (tableDataResult && tableDataResult.length > 0) {
             var cleanData = tableDataResult.filter(function(row) {
                 return row && row.some(function(cell) { return cell && cell.length > 0; });
@@ -627,7 +593,7 @@ async function processImage() {
 }
 
 // ============================================================
-//  RENDERIZAR TABLA (TODO IGUAL)
+//  RENDERIZAR TABLA
 // ============================================================
 
 function renderTable(data) {
@@ -837,11 +803,11 @@ if (modoLineasBtn) modoLineasBtn.addEventListener('click', function() { setModo(
 if (modoEspaciosBtn) modoEspaciosBtn.addEventListener('click', function() { setModo('espacios'); });
 if (modoPatronBtn) modoPatronBtn.addEventListener('click', function() { setModo('patron'); });
 
-console.log("🚀 Iniciando app con ML Kit nativo...");
+console.log("🚀 Iniciando app con Tesseract.js...");
 setModo('lineas');
 
 setTimeout(function() {
-    initOCR().then(function(result) {
-        console.log("🔚 initOCR resultado:", result);
+    initTesseract().then(function(result) {
+        console.log("🔚 initTesseract resultado:", result);
     });
 }, 1000);
