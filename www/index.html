@@ -17,19 +17,20 @@
 
 <div class="container">
 
-  <!-- PASO 1: VISTA PREVIA -->
   <div class="preview-card">
     <canvas id="mainCanvas" width="192" height="192"></canvas>
     <div class="preview-sizes" id="previewSizes"></div>
   </div>
 
-  <!-- PASO 2: FOTO -->
   <div class="card">
     <div class="step-title">1. Pon tu imagen</div>
-    <label class="big-btn" for="fotoInput">
-      📷 Elegir foto o dibujo
-      <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)" hidden>
-    </label>
+    <div class="row">
+      <label class="big-btn" for="fotoInput" style="flex:1">
+        📷 Elegir foto
+        <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)" hidden>
+      </label>
+      <button class="btn btn-outline" style="flex:1;padding:18px;border-radius:12px" onclick="abrirGaleria()">🖼️ Galería</button>
+    </div>
     <div class="row" id="fotoAcciones" style="display:none">
       <button class="btn btn-sm btn-outline" onclick="abrirRecorte()">✂️ Recortar</button>
       <button class="btn btn-sm btn-outline" onclick="quitarFoto()">✖️ Quitar foto</button>
@@ -41,13 +42,26 @@
     <p class="hint">Sin foto, creas un icono con color y texto.</p>
   </div>
 
-  <!-- PASO 3: COLOR -->
+  <div class="card" id="combinarCard" style="display:none">
+    <div class="step-title">🔗 Combinar fotos</div>
+    <p class="hint" id="combinarHint">Tienes 2 fotos. Elige cómo combinarlas.</p>
+    <div class="row">
+      <select id="modoCombinar">
+        <option value="superponer">Superponer (una encima de otra)</option>
+        <option value="lado">Lado a lado</option>
+      </select>
+    </div>
+    <div class="row">
+      <button class="btn btn-sm btn-primary" onclick="aplicarCombinacion()">✅ Combinar</button>
+      <button class="btn btn-sm btn-outline" onclick="cancelarCombinacion()">✖️ Cancelar</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="step-title">2. Elige un color</div>
     <div class="colors" id="colores"></div>
   </div>
 
-  <!-- PASO 4: TEXTO -->
   <div class="card">
     <div class="step-title">3. Ponle texto (opcional)</div>
     <div class="row">
@@ -63,10 +77,8 @@
     </div>
   </div>
 
-  <!-- BOTÓN PRINCIPAL -->
   <button class="download-btn" onclick="descargarTodos()">⬇️ DESCARGAR MIS ICONOS</button>
 
-  <!-- MOCKUP -->
   <div class="mockup-wrap">
     <div class="mockup-phone">
       <div class="mockup-icon">
@@ -82,9 +94,18 @@
     </div>
   </div>
 
-  <!-- AVANZADO -->
   <details class="advanced">
     <summary>⚙️ Más opciones</summary>
+
+    <div class="adv-section">
+      <label class="adv-label">API Key de Pixabay</label>
+      <div class="row">
+        <input type="password" id="apiKeyInput" placeholder="Pega tu key aquí">
+        <button class="btn btn-sm btn-primary" onclick="guardarApiKey()">💾 Guardar</button>
+        <button class="btn btn-sm btn-outline" onclick="borrarApiKey()">🗑️</button>
+      </div>
+      <p class="hint">Se guarda cifrada en tu teléfono. <a href="https://pixabay.com/api/docs/" target="_blank">¿Cómo obtenerla?</a></p>
+    </div>
 
     <div class="adv-section">
       <label class="adv-label">Nombre de la app</label>
@@ -115,6 +136,22 @@
 
 </div>
 
-<script src="js/app.js"></script>
+<div class="modal" id="galeriaModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>🖼️ Galería Pixabay</span>
+      <button class="modal-close" onclick="cerrarGaleria()">✖️</button>
+    </div>
+    <div class="row" style="padding:0 12px">
+      <input type="text" id="busquedaInput" placeholder="Ej: gato, flor, montaña..." style="flex:2">
+      <button class="btn btn-primary" onclick="buscarImagenes()">🔍 Buscar</button>
+    </div>
+    <div class="galeria-grid" id="galeriaGrid">
+      <p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Escribe algo y pulsa Buscar.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

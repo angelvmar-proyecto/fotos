@@ -1,13 +1,74 @@
+// ===== SEGURIDAD: API KEY =====
+// Carga dinámica del plugin. Si no está disponible (web), usa localStorage como respaldo.
+let SecureStorage = null;
+
+async function cargarSecureStorage(){
+  try {
+    const mod = await import('@capacitor-community/secure-storage');
+    SecureStorage = mod.SecureStorage;
+  } catch(e) {
+    SecureStorage = null;
+  }
+}
+
+let apiKeyGuardada = null;
+
+async function cargarApiKey(){
+  try {
+    if(SecureStorage) {
+      const { value } = await SecureStorage.get({ key: 'pixabay_key' });
+      apiKeyGuardada = value || null;
+    } else {
+      apiKeyGuardada = localStorage.getItem('pixabay_key');
+    }
+  } catch(e) {
+    apiKeyGuardada = localStorage.getItem('pixabay_key');
+  }
+  const input = document.getElementById('apiKeyInput');
+  if(input && apiKeyGuardada) input.value = apiKeyGuardada;
+}
+
+async function guardarApiKey(){
+  const input = document.getElementById('apiKeyInput').value.trim();
+  if(!input) { mostrarMensaje('Escribe una key', true); return; }
+  try {
+    if(SecureStorage) {
+      await SecureStorage.set({ key: 'pixabay_key', value: input });
+    } else {
+      localStorage.setItem('pixabay_key', input);
+    }
+    apiKeyGuardada = input;
+    mostrarMensaje('✅ Key guardada de forma segura');
+  } catch(e) {
+    mostrarMensaje('Error al guardar la key', true);
+  }
+}
+
+async function borrarApiKey(){
+  try {
+    if(SecureStorage) {
+      await SecureStorage.remove({ key: 'pixabay_key' });
+    } else {
+      localStorage.removeItem('pixabay_key');
+    }
+    apiKeyGuardada = null;
+    document.getElementById('apiKeyInput').value = '';
+    mostrarMensaje('🗑️ Key borrada');
+  } catch(e) {
+    mostrarMensaje('Error al borrar', true);
+  }
+}
+
 // ===== ESTADO =====
 let currentSize = 'xxxhdpi';
 let fotoOriginal = null;
 let fotoActual = null;
 let colorSeleccionado = 0;
 let debounceTimer = null;
+let fotosParaCombinar = [];
 
 const sizes = { mdpi:48, hdpi:72, xhdpi:96, xxhdpi:144, xxxhdpi:192, play:512 };
 
-// Colores bonitos: cada uno es {fondo, texto}
 const COLORES = [
   { nombre:'Azul',    bg1:'#1976D2', bg2:'#0D47A1', txt:'#FFFFFF' },
   { nombre:'Naranja', bg1:'#FF9800', bg2:'#E65100', txt:'#FFFFFF' },
@@ -20,7 +81,10 @@ const COLORES = [
 ];
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await cargarSecureStorage();
+  await cargarApiKey();
+
   initColores();
 
   ['iconText','textPos','fontSize'].forEach(id => {
@@ -34,13 +98,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if(fotoActual) convertirArteLineal();
   });
 
-  // Primer dibujo
+  document.getElementById('busquedaInput').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') buscarImagenes();
+  });
+
   dibujarTodo();
 });
 
 function dibujarTodo(){ draw(); preview(); }
 
-// ===== COLORES =====
 function initColores(){
   const cont = document.getElementById('colores');
   cont.innerHTML = '';
@@ -59,6 +125,88 @@ function initColores(){
   });
 }
 
+// ===== PIXABAY =====
+function abrirGaleria(){
+  if(!apiKeyGuardada) {
+    mostrarMensaje('Primero guarda tu API Key en ⚙️ Más opciones', true);
+    return;
+  }
+  document.getElementById('galeriaModal').classList.add('show');
+}
+
+function cerrarGaleria(){
+  document.getElementById('galeriaModal').classList.remove('show');
+}
+
+async function buscarImagenes(){
+  if(!apiKeyGuardada) { mostrarMensaje('Falta la API Key', true); return; }
+  const q = document.getElementById('busquedaInput').value.trim();
+  if(!q) { mostrarMensaje('Escribe qué buscar', true); return; }
+  const grid = document.getElementById('galeriaGrid');
+  grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Buscando...</p>';
+
+  try {
+    const url = `https://pixabay.com/api/?key=${apiKeyGuardada}&q=${encodeURIComponent(q)}&image_type=photo&per_page=9&lang=es&safesearch=true`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error('API error: ' + resp.status);
+    const data = await resp.json();
+    if(!data.hits || data.hits.length === 0){
+      grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Sin resultados.</p>';
+      return;
+    }
+    grid.innerHTML = '';
+    data.hits.forEach(hit => {
+      const div = document.createElement('div');
+      div.className = 'galeria-item';
+      div.innerHTML = `<img src="${hit.previewURL}" alt="${hit.tags}" loading="lazy">`;
+      div.onclick = () => seleccionarImagenPixabay(hit.webformatURL);
+      grid.appendChild(div);
+    });
+  } catch(err) {
+    grid.innerHTML = `<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px;color:#f44336">Error: ${err.message}</p>`;
+  }
+}
+
+async function seleccionarImagenPixabay(url){
+  mostrarMensaje('Descargando imagen...');
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const dataURL = await blobToDataURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      recortarCuadrado(img, 1, (recortada) => {
+        if(!fotoActual) {
+          fotoOriginal = recortada;
+          fotoActual = recortada;
+          document.getElementById('fotoAcciones').style.display = 'flex';
+          document.getElementById('arteLinealBox').style.display = 'block';
+          dibujarTodo();
+          mostrarMensaje('✅ Imagen cargada');
+        } else {
+          if(fotosParaCombinar.length === 0) fotosParaCombinar.push(fotoActual);
+          fotosParaCombinar.push(recortada);
+          mostrarCombinar();
+          mostrarMensaje('✅ Añadida para combinar');
+        }
+        cerrarGaleria();
+      });
+    };
+    img.src = dataURL;
+  } catch(err) {
+    mostrarMensaje('Error al descargar', true);
+  }
+}
+
+function blobToDataURL(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 // ===== DIBUJO =====
 function draw() {
   const canvas = document.getElementById('mainCanvas');
@@ -66,10 +214,8 @@ function draw() {
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h);
-
   const color = COLORES[colorSeleccionado];
 
-  // Fondo: foto o color
   if(fotoActual) {
     ctx.drawImage(fotoActual, 0, 0, w, h);
   } else {
@@ -80,7 +226,6 @@ function draw() {
     ctx.fillRect(0, 0, w, h);
   }
 
-  // Texto
   const texto = document.getElementById('iconText').value;
   if(texto) {
     const tam = parseInt(document.getElementById('fontSize').value);
@@ -104,7 +249,6 @@ function draw() {
   }
 }
 
-// ===== VISTA PREVIA DE TAMAÑOS =====
 function preview() {
   const cont = document.getElementById('previewSizes');
   if(!cont) return;
@@ -146,6 +290,8 @@ function subirFoto(input) {
         fotoActual = recortada;
         document.getElementById('fotoAcciones').style.display = 'flex';
         document.getElementById('arteLinealBox').style.display = 'block';
+        fotosParaCombinar = [];
+        document.getElementById('combinarCard').style.display = 'none';
         dibujarTodo();
         mostrarMensaje('✅ Foto cargada');
       });
@@ -155,7 +301,6 @@ function subirFoto(input) {
   lector.readAsDataURL(archivo);
 }
 
-// Callback: cuando la imagen esté lista, llamar a callback(imagen)
 function recortarCuadrado(img, tam, callback) {
   const lado = Math.min(img.width, img.height) * tam;
   const sx = img.width/2 - lado/2;
@@ -187,11 +332,56 @@ function aplicarRecorte() {
 function quitarFoto() {
   fotoOriginal = null;
   fotoActual = null;
+  fotosParaCombinar = [];
   document.getElementById('fotoAcciones').style.display = 'none';
   document.getElementById('recorteRow').style.display = 'none';
   document.getElementById('arteLinealBox').style.display = 'none';
+  document.getElementById('combinarCard').style.display = 'none';
   document.getElementById('fotoInput').value = '';
   dibujarTodo();
+}
+
+// ===== COMBINAR =====
+function mostrarCombinar(){
+  document.getElementById('combinarCard').style.display = 'block';
+  document.getElementById('combinarHint').textContent = `Tienes ${fotosParaCombinar.length} fotos. Elige cómo combinarlas.`;
+}
+
+function cancelarCombinacion(){
+  fotosParaCombinar = [];
+  document.getElementById('combinarCard').style.display = 'none';
+  mostrarMensaje('Combinación cancelada');
+}
+
+function aplicarCombinacion(){
+  if(fotosParaCombinar.length < 2) { mostrarMensaje('Necesitas 2 fotos', true); return; }
+  const modo = document.getElementById('modoCombinar').value;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const ctx = c.getContext('2d');
+
+  if(modo === 'superponer') {
+    ctx.drawImage(fotosParaCombinar[0], 0, 0, 512, 512);
+    ctx.globalAlpha = 0.55;
+    ctx.drawImage(fotosParaCombinar[1], 0, 0, 512, 512);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.drawImage(fotosParaCombinar[0], 0, 0, 256, 512);
+    ctx.drawImage(fotosParaCombinar[1], 256, 0, 256, 512);
+  }
+
+  const out = new Image();
+  out.onload = () => {
+    fotoActual = out;
+    fotoOriginal = out;
+    fotosParaCombinar = [];
+    document.getElementById('combinarCard').style.display = 'none';
+    document.getElementById('fotoAcciones').style.display = 'flex';
+    document.getElementById('arteLinealBox').style.display = 'block';
+    dibujarTodo();
+    mostrarMensaje('✅ Fotos combinadas');
+  };
+  out.src = c.toDataURL();
 }
 
 // ===== ARTE LINEAL =====
@@ -206,12 +396,9 @@ function convertirArteLineal() {
   const nivel = parseInt(document.getElementById('linealNivel').value) / 100;
   const color = COLORES[colorSeleccionado];
 
-  // Convertir color hex de fondo a RGB
   const rFondo = parseInt(color.bg2.slice(1,3),16);
   const gFondo = parseInt(color.bg2.slice(3,5),16);
   const bFondo = parseInt(color.bg2.slice(5,7),16);
-
-  // Líneas en color de texto
   const rLinea = parseInt(color.txt.slice(1,3),16);
   const gLinea = parseInt(color.txt.slice(3,5),16);
   const bLinea = parseInt(color.txt.slice(5,7),16);
@@ -253,7 +440,6 @@ function volverFotoOriginal() {
   mostrarMensaje('↩️ Foto original');
 }
 
-// ===== REINICIAR =====
 function resetTodo() {
   quitarFoto();
   document.getElementById('iconText').value = '';
@@ -269,8 +455,6 @@ function resetTodo() {
 async function descargarTodos() {
   const zip = new JSZip();
   const orig = document.getElementById('mainCanvas');
-
-  // Aseguramos que el canvas tiene contenido
   if(!orig || orig.width === 0) { mostrarMensaje('Nada que descargar', true); return; }
 
   const nombres = { mdpi:'mdpi', hdpi:'hdpi', xhdpi:'xhdpi', xxhdpi:'xxhdpi', xxxhdpi:'xxxhdpi' };
@@ -285,13 +469,11 @@ async function descargarTodos() {
     }
     if(!nombres[tam]) continue;
 
-    // Cuadrado
     const c = document.createElement('canvas');
     c.width = c.height = px;
     c.getContext('2d').drawImage(orig, 0, 0, px, px);
     zip.file(`res/mipmap-${tam}/ic_launcher.png`, c.toDataURL('image/png').split(',')[1], {base64:true});
 
-    // Redondo
     const cr = document.createElement('canvas');
     cr.width = cr.height = px;
     const ctxr = cr.getContext('2d');
@@ -325,7 +507,6 @@ async function descargarTodos() {
   mostrarMensaje('✅ ZIP descargado');
 }
 
-// ===== MENSAJES =====
 function mostrarMensaje(texto, esError) {
   const m = document.getElementById('status');
   m.textContent = texto;
@@ -333,3 +514,21 @@ function mostrarMensaje(texto, esError) {
   m.classList.add('show');
   setTimeout(() => m.classList.remove('show'), 2000);
 }
+
+// Exponer funciones globales para los onclick del HTML
+window.abrirGaleria = abrirGaleria;
+window.cerrarGaleria = cerrarGaleria;
+window.buscarImagenes = buscarImagenes;
+window.seleccionarImagenPixabay = seleccionarImagenPixabay;
+window.subirFoto = subirFoto;
+window.abrirRecorte = abrirRecorte;
+window.aplicarRecorte = aplicarRecorte;
+window.quitarFoto = quitarFoto;
+window.cancelarCombinacion = cancelarCombinacion;
+window.aplicarCombinacion = aplicarCombinacion;
+window.convertirArteLineal = convertirArteLineal;
+window.volverFotoOriginal = volverFotoOriginal;
+window.resetTodo = resetTodo;
+window.descargarTodos = descargarTodos;
+window.guardarApiKey = guardarApiKey;
+window.borrarApiKey = borrarApiKey;
