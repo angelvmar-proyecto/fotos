@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Creador de Iconos</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<div class="status" id="status">¡Listo!</div>
+<header>
+  📲 Creador de Iconos
+  <div class="subtitle">Iconos + Arte Lineal + XML Manifest</div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>💾 Mis Proyectos</h2>
+    <div class="row">
+      <input type="text" id="projName" placeholder="Nombre del proyecto" value="Mi_App">
+      <button class="btn btn-primary btn-sm" onclick="saveProject()">💾 Guardar</button>
+    </div>
+    <div class="proj-list" id="projList"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="sizes">📐 Tamaños</button>
+    <button class="tab" data-tab="design">🎨 Diseño</button>
+    <button class="tab" data-tab="lineal">✏️ Arte Lineal</button>
+    <button class="tab" data-tab="icono">🖼️ Desde Icono</button>
+    <button class="tab" data-tab="manifest">📄 XML/Manifest</button>
+    <button class="tab" data-tab="export">📦 Exportar</button>
+  </div>
+
+  <div id="tab-sizes" class="tab-panel">
+    <div class="card">
+      <h2>Tamaños Estándar Android</h2>
+      <div class="preview-wrap" id="previewArea"></div>
+      <div class="grid-sizes" id="sizeSelector">
+        <div class="size-item" data-size="mdpi">mdpi<br><small>48px</small></div>
+        <div class="size-item" data-size="hdpi">hdpi<br><small>72px</small></div>
+        <div class="size-item active" data-size="xhdpi">xhdpi<br><small>96px</small></div>
+        <div class="size-item" data-size="xxhdpi">xxhdpi<br><small>144px</small></div>
+        <div class="size-item" data-size="xxxhdpi">xxxhdpi<br><small>192px</small></div>
+        <div class="size-item" data-size="adap">Adaptativo<br><small>512px</small></div>
+        <div class="size-item" data-size="play">Play Store<br><small>512px</small></div>
+        <div class="size-item" data-size="round">Redondo<br><small>192px</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-design" class="tab-panel" style="display:none">
+    <div class="card">
+      <h2>🎨 Vista Previa</h2>
+      <div class="canvas-container">
+        <canvas id="mainCanvas" width="192" height="192"></canvas>
+      </div>
+      <h2>📋 Plantillas Rápidas</h2>
+      <div class="grid-templates" style="margin-bottom:16px">
+        <div class="tpl-item" style="background:linear-gradient(135deg,#1976D2,#0D47A1);color:white" onclick="applyTemplate('mar')">MAR<br><small>Azul</small></div>
+        <div class="tpl-item" style="background:linear-gradient(135deg,#FF9800,#E65100);color:white" onclick="applyTemplate('caribe')">Sol<br><small>Naranja</small></div>
+        <div class="tpl-item" style="background:linear-gradient(135deg,#4CAF50,#2E7D32);color:white" onclick="applyTemplate('eco')">Eco<br><small>Verde</small></div>
+        <div class="tpl-item" style="background:linear-gradient(135deg,#9C27B0,#6A1B9A);color:white" onclick="applyTemplate('pro')">Pro<br><small>Morado</small></div>
+        <div class="tpl-item" style="background:linear-gradient(135deg,#F44336,#C62828);color:white" onclick="applyTemplate('urgente')">Urgente<br><small>Rojo</small></div>
+        <div class="tpl-item" style="background:linear-gradient(135deg,#607D8B,#37474F);color:white" onclick="applyTemplate('neutro')">Neutro<br><small>Gris</small></div>
+      </div>
+      <div class="row">
+        <label>Tipo fondo:</label>
+        <select id="bgType" onchange="toggleBgOptions()">
+          <option value="solid">Color Sólido</option>
+          <option value="gradient">Gradiente</option>
+          <option value="none">Transparente</option>
+        </select>
+      </div>
+      <div class="row" id="bgSolidRow">
+        <label>Color 1:</label>
+        <input type="color" id="bgColor1" value="#1976D2">
+      </div>
+      <div class="row" id="bgGradientRow" style="display:none">
+        <label>Color 1:</label>
+        <input type="color" id="bgColor1Grad" value="#1976D2">
+        <label>Color 2:</label>
+        <input type="color" id="bgColor2" value="#0D47A1">
+      </div>
+      <div class="row">
+        <label>Figura:</label>
+        <select id="shapeType">
+          <option value="circle">Círculo</option>
+          <option value="square">Cuadrado</option>
+          <option value="rounded">Redondo</option>
+          <option value="triangle">Triángulo</option>
+          <option value="hexagon">Hexágono</option>
+          <option value="none">Sin figura</option>
+        </select>
+        <label>Color figura:</label>
+        <input type="color" id="shapeColor" value="#FFFFFF">
+      </div>
+      <div class="row">
+        <label>Tamaño figura:</label>
+        <input type="range" id="shapeSize" min="20" max="80" value="38">
+      </div>
+      <div class="row">
+        <label>Texto:</label>
+        <input type="text" id="iconText" maxlength="3" placeholder="ABC">
+        <label>Color texto:</label>
+        <input type="color" id="textColor" value="#FFFFFF">
+      </div>
+      <div class="row">
+        <label>Tamaño fuente:</label>
+        <input type="range" id="fontSize" min="12" max="80" value="48">
+        <label>Negrita:</label>
+        <div class="toggle-switch on" id="fontBold" onclick="this.classList.toggle('on');draw()"></div>
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <label>Sombra:</label>
+        <div class="toggle-switch" id="shadowOn" onclick="this.classList.toggle('on');draw()"></div>
+      </div>
+      <div class="row">
+        <label>Borde:</label>
+        <div class="toggle-switch" id="borderOn" onclick="this.classList.toggle('on');draw()"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-outline" onclick="undo()">↩️ Deshacer</button>
+        <button class="btn btn-outline" onclick="redo()">↪️ Rehacer</button>
+        <button class="btn btn-err" onclick="resetDesign()">🗑️ Reiniciar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-lineal" class="tab-panel" style="display:none">
+    <div class="card">
+      <h2>✏️ Convertir Imagen a Arte Lineal</h2>
+      <div class="canvas-container">
+        <canvas id="linealCanvas" width="192" height="192"></canvas>
+      </div>
+      <div class="row">
+        <input type="file" id="linealUpload" accept="image/*" onchange="cargarImagenLineal(this)">
+      </div>
+      <p style="font-size:12px;color:#666;margin:8px 0">Sube cualquier foto o imagen → se convierte en dibujo de líneas</p>
+      <div class="divider"></div>
+      <h3 style="font-size:14px;color:#1976D2;margin-bottom:10px">🎛️ Controles de Estilo</h3>
+      <div class="row">
+        <label>Complejidad:</label>
+        <input type="range" id="linealNivel" min="10" max="100" value="50">
+        <span id="linealNivelEtiqueta">50%</span>
+      </div>
+      <div class="row">
+        <label>Brillo:</label>
+        <input type="range" id="linealBrillo" min="-100" max="100" value="0">
+      </div>
+      <div class="row">
+        <label>Contraste:</label>
+        <input type="range" id="linealContraste" min="0" max="200" value="100">
+      </div>
+      <div class="row">
+        <label>Umbral:</label>
+        <input type="range" id="linealUmbral" min="10" max="240" value="128">
+      </div>
+      <div class="divider"></div>
+      <h3 style="font-size:14px;color:#1976D2;margin-bottom:10px">🎨 Colores y Estilo</h3>
+      <div class="row">
+        <label>Color Líneas:</label>
+        <input type="color" id="linealColorLineas" value="#000000">
+      </div>
+      <div class="row">
+        <label>Fondo:</label>
+        <input type="color" id="linealFondo" value="#FFFFFF">
+        <button class="btn btn-outline btn-sm" onclick="alternarFondoTransparente(this)">Transparente</button>
+      </div>
+      <div class="row">
+        <label>Grosor Líneas:</label>
+        <input type="range" id="linealGrosor" min="1" max="10" value="2">
+      </div>
+      <div class="divider"></div>
+      <div class="row">
+        <button class="btn btn-primary" onclick="aplicarArteLineal()">🔄 Regenerar</button>
+        <button class="btn btn-outline" onclick="reiniciarLineal()">↩️ Reiniciar</button>
+        <button class="btn btn-accent" onclick="usarComoIcono()">✅ Usar como Icono</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-icono" class="tab-panel" style="display:none">
+    <div class="card">
+      <h2>🖼️ Convertir Icono en Logo APK</h2>
+      <div class="canvas-container">
+        <canvas id="iconCanvas" width="192" height="192"></canvas>
+      </div>
+      <div class="row">
+        <input type="file" id="iconUpload" accept="image/*,.ico,.svg" onchange="processIcon(this)">
+      </div>
+      <p style="font-size:12px;color:#666;margin:8px 0">Sube cualquier icono (.png, .jpg, .ico, .svg)</p>
+      <div class="divider"></div>
+      <h3 style="font-size:14px;color:#1976D2;margin-bottom:10px">Opciones de Ajuste</h3>
+      <div class="row">
+        <label>Escala:</label>
+        <input type="range" id="iconScale" min="20" max="100" value="70">
+      </div>
+      <div class="row">
+        <label>Posición X:</label>
+        <input type="range" id="iconOffsetX" min="-50" max="50" value="0">
+        <label>Posición Y:</label>
+        <input type="range" id="iconOffsetY" min="-50" max="50" value="0">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="usarIconoComoDiseno()">✅ Usar como Icono</button>
+        <button class="btn btn-outline" onclick="resetIconSettings()">🔄 Reiniciar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-manifest" class="tab-panel" style="display:none">
+    <div class="card">
+      <h2>📄 Código XML para tu Proyecto Android</h2>
+      <h3 style="font-size:14px;color:#1976D2;margin:12px 0 6px">AndroidManifest.xml</h3>
+      <div class="code-block" id="manifestCode"></div>
+      <button class="btn btn-primary btn-sm" onclick="copiarCodigo('manifestCode')">📋 Copiar</button>
+
+      <h3 style="font-size:14px;color:#1976D2;margin:16px 0 6px">res/values/colors.xml</h3>
+      <div class="code-block" id="colorsCode"></div>
+      <button class="btn btn-primary btn-sm" onclick="copiarCodigo('colorsCode')">📋 Copiar</button>
+
+      <h3 style="font-size:14px;color:#1976D2;margin:16px 0 6px">ic_launcher.xml (adaptativo)</h3>
+      <div class="code-block" id="adaptiveCode"></div>
+      <button class="btn btn-primary btn-sm" onclick="copiarCodigo('adaptiveCode')">📋 Copiar</button>
+    </div>
+  </div>
+
+  <div id="tab-export" class="tab-panel" style="display:none">
+    <div class="card">
+      <h2>📦 Exportar Iconos</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">
+        Genera todos los tamaños estándar Android en un archivo ZIP, listo para pegar en tu proyecto.
+      </p>
+      <div class="row">
+        <button class="btn btn-primary" onclick="descargarTodos()">⬇️ Descargar ZIP completo</button>
+        <button class="btn btn-outline" onclick="descargarIndividual()">🖼️ Descargar esta vista</button>
+      </div>
+      <div class="divider"></div>
+      <h3 style="font-size:14px;color:#1976D2;margin:12px 0 6px">📂 Estructura del ZIP:</h3>
+      <ul style="font-size:12px;line-height:1.8;color:#555;padding-left:16px">
+        <li>res/mipmap-mdpi/ic_launcher.png (48px)</li>
+        <li>res/mipmap-hdpi/ic_launcher.png (72px)</li>
+        <li>res/mipmap-xhdpi/ic_launcher.png (96px)</li>
+        <li>res/mipmap-xxhdpi/ic_launcher.png (144px)</li>
+        <li>res/mipmap-xxxhdpi/ic_launcher.png (192px)</li>
+        <li>play_store_icon.png (512px)</li>
+        <li>AndroidManifest.xml.txt</li>
+        <li>colors.xml.txt</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

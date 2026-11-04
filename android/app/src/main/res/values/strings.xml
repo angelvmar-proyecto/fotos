@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Creador de Iconos</string>
+    <string name="title_activity_main">Creador de Iconos</string>
+    <string name="package_name">com.angelvmar.creadoriconos</string>
+    <string name="custom_url_scheme">com.angelvmar.creadoriconos</string>
+</resources>
