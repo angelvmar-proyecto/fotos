@@ -12,70 +12,46 @@
 <div class="status" id="status">¡Listo!</div>
 <header>
   📲 Creador de Iconos
-  <div class="subtitle">Foto o diseño → icono APK</div>
+  <div class="subtitle">3 pasos y listo</div>
 </header>
 
 <div class="container">
 
-  <!-- PREVIEW -->
-  <div class="card preview-card">
+  <!-- PASO 1: VISTA PREVIA -->
+  <div class="preview-card">
     <canvas id="mainCanvas" width="192" height="192"></canvas>
     <div class="preview-sizes" id="previewSizes"></div>
   </div>
 
-  <!-- FOTO -->
+  <!-- PASO 2: FOTO -->
   <div class="card">
-    <h2>📷 Foto</h2>
-    <div class="row">
-      <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)">
-      <button class="btn btn-outline btn-sm" onclick="quitarFoto()">✖️ Quitar</button>
+    <div class="step-title">1. Pon tu imagen</div>
+    <label class="big-btn" for="fotoInput">
+      📷 Elegir foto o dibujo
+      <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)" hidden>
+    </label>
+    <div class="row" id="fotoAcciones" style="display:none">
+      <button class="btn btn-sm btn-outline" onclick="abrirRecorte()">✂️ Recortar</button>
+      <button class="btn btn-sm btn-outline" onclick="quitarFoto()">✖️ Quitar foto</button>
     </div>
     <div class="row" id="recorteRow" style="display:none">
-      <label>Recorte:</label>
       <input type="range" id="recorteTam" min="20" max="100" value="80">
-      <button class="btn btn-primary btn-sm" onclick="aplicarRecorte()">✅ Aplicar</button>
+      <button class="btn btn-sm btn-primary" onclick="aplicarRecorte()">✅ Aplicar recorte</button>
     </div>
-    <p class="hint" id="fotoHint">Opcional. Sin foto, usas solo colores y texto.</p>
+    <p class="hint">Sin foto, creas un icono con color y texto.</p>
   </div>
 
-  <!-- DISEÑO -->
+  <!-- PASO 3: COLOR -->
   <div class="card">
-    <h2>🎨 Diseño</h2>
-    <div class="row">
-      <label>Paletas:</label>
-      <div class="palette-scroll" id="paletas"></div>
-    </div>
-    <div class="row">
-      <label>Fondo:</label>
-      <select id="bgType" onchange="toggleBgOptions()">
-        <option value="solid">Sólido</option>
-        <option value="gradient">Gradiente</option>
-        <option value="none">Transparente</option>
-      </select>
-      <input type="color" id="bgColor1" value="#1976D2">
-      <input type="color" id="bgColor2" value="#0D47A1">
-    </div>
-    <div class="row">
-      <label>Forma:</label>
-      <select id="shapeType">
-        <option value="circle">Círculo</option>
-        <option value="square">Cuadrado</option>
-        <option value="rounded">Redondo</option>
-        <option value="triangle">Triángulo</option>
-        <option value="hexagon">Hexágono</option>
-        <option value="none">Sin forma</option>
-      </select>
-      <input type="color" id="shapeColor" value="#FFFFFF">
-      <input type="range" id="shapeSize" min="20" max="80" value="38" style="max-width:90px">
-    </div>
+    <div class="step-title">2. Elige un color</div>
+    <div class="colors" id="colores"></div>
   </div>
 
-  <!-- TEXTO -->
+  <!-- PASO 4: TEXTO -->
   <div class="card">
-    <h2>🔤 Texto</h2>
+    <div class="step-title">3. Ponle texto (opcional)</div>
     <div class="row">
       <input type="text" id="iconText" maxlength="3" placeholder="ABC">
-      <input type="color" id="textColor" value="#FFFFFF">
     </div>
     <div class="row">
       <label>Posición:</label>
@@ -84,83 +60,58 @@
         <option value="bottom">Abajo</option>
         <option value="top">Arriba</option>
       </select>
-      <label>Tamaño:</label>
-      <input type="range" id="fontSize" min="12" max="80" value="48" style="max-width:90px">
-    </div>
-    <div class="row">
-      <label>Negrita:</label>
-      <div class="toggle-switch on" id="fontBold" onclick="this.classList.toggle('on');draw()"></div>
-      <label>Sombra texto:</label>
-      <div class="toggle-switch" id="textShadow" onclick="this.classList.toggle('on');draw()"></div>
     </div>
   </div>
 
-  <!-- EFECTOS -->
-  <div class="card">
-    <h2>✨ Efectos</h2>
-    <div class="row">
-      <label>Sombra general:</label>
-      <div class="toggle-switch" id="shadowOn" onclick="this.classList.toggle('on');draw()"></div>
-      <label>Borde:</label>
-      <div class="toggle-switch" id="borderOn" onclick="this.classList.toggle('on');draw()"></div>
-    </div>
-    <div class="row">
-      <button class="btn btn-outline" onclick="undo()">↩️ Deshacer</button>
-      <button class="btn btn-outline" onclick="redo()">↪️ Rehacer</button>
-      <button class="btn btn-err" onclick="resetTodo()">🗑️ Reiniciar</button>
-    </div>
-  </div>
+  <!-- BOTÓN PRINCIPAL -->
+  <button class="download-btn" onclick="descargarTodos()">⬇️ DESCARGAR MIS ICONOS</button>
 
-  <!-- ARTE LINEAL -->
-  <div class="card">
-    <h2>✏️ Arte Lineal</h2>
-    <p class="hint">Convierte la foto en dibujo de líneas. Requiere una foto cargada.</p>
-    <div class="row">
-      <button class="btn btn-primary" onclick="convertirArteLineal()">🔄 Convertir a líneas</button>
-      <button class="btn btn-outline" onclick="volverFotoOriginal()">↩️ Volver a foto</button>
-    </div>
-    <div class="row">
-      <label>Detalle:</label>
-      <input type="range" id="linealNivel" min="10" max="100" value="50">
-      <span id="linealNivelEtiqueta">50%</span>
-    </div>
-    <div class="row">
-      <label>Umbral:</label>
-      <input type="range" id="linealUmbral" min="10" max="240" value="128">
-      <button class="btn btn-outline btn-sm" onclick="autoUmbral()">🪄 Auto</button>
-    </div>
-    <div class="row">
-      <label>Color líneas:</label>
-      <input type="color" id="linealColorLineas" value="#000000">
-      <label>Fondo:</label>
-      <input type="color" id="linealFondo" value="#FFFFFF">
-    </div>
-  </div>
-
-  <!-- EXPORTAR -->
-  <div class="card">
-    <h2>📦 Exportar</h2>
-    <div class="row">
-      <button class="btn btn-primary" onclick="descargarTodos()">⬇️ Descargar ZIP completo</button>
-      <button class="btn btn-outline" onclick="descargarIndividual()">🖼️ Solo esta vista</button>
-    </div>
-    <div class="row">
-      <label>Tamaño vista:</label>
-      <div class="size-pills" id="sizePills">
-        <button data-size="mdpi">48</button>
-        <button data-size="hdpi">72</button>
-        <button data-size="xhdpi" class="active">96</button>
-        <button data-size="xxhdpi">144</button>
-        <button data-size="xxxhdpi">192</button>
-        <button data-size="play">512</button>
+  <!-- MOCKUP -->
+  <div class="mockup-wrap">
+    <div class="mockup-phone">
+      <div class="mockup-icon">
+        <canvas id="mockupCanvas" width="60" height="60"></canvas>
+        <span id="mockupName">Mi_App</span>
+      </div>
+      <div class="mockup-dock">
+        <div class="dock-dot"></div>
+        <div class="dock-dot"></div>
+        <div class="dock-dot"></div>
+        <div class="dock-dot"></div>
       </div>
     </div>
-    <div class="row">
-      <input type="text" id="projName" placeholder="Nombre proyecto" value="Mi_App">
-      <button class="btn btn-outline btn-sm" onclick="guardarProyecto()">💾 Guardar</button>
-    </div>
-    <div class="proj-list" id="projList"></div>
   </div>
+
+  <!-- AVANZADO -->
+  <details class="advanced">
+    <summary>⚙️ Más opciones</summary>
+
+    <div class="adv-section">
+      <label class="adv-label">Nombre de la app</label>
+      <input type="text" id="projName" placeholder="Mi_App" value="Mi_App" oninput="document.getElementById('mockupName').textContent = this.value || 'Mi_App'">
+    </div>
+
+    <div class="adv-section">
+      <label class="adv-label">Tamaño del texto</label>
+      <input type="range" id="fontSize" min="12" max="80" value="48">
+    </div>
+
+    <div class="adv-section" id="arteLinealBox" style="display:none">
+      <label class="adv-label">Convertir foto a dibujo</label>
+      <div class="row">
+        <button class="btn btn-sm btn-outline" onclick="convertirArteLineal()">✏️ Convertir</button>
+        <button class="btn btn-sm btn-outline" onclick="volverFotoOriginal()">↩️ Volver</button>
+      </div>
+      <div class="row">
+        <label>Detalle:</label>
+        <input type="range" id="linealNivel" min="10" max="100" value="50">
+      </div>
+    </div>
+
+    <div class="adv-section">
+      <button class="btn btn-sm btn-err" onclick="resetTodo()">🗑️ Reiniciar todo</button>
+    </div>
+  </details>
 
 </div>
 
