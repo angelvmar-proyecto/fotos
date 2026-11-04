@@ -12,272 +12,156 @@
 <div class="status" id="status">¡Listo!</div>
 <header>
   📲 Creador de Iconos
-  <div class="subtitle">v2 · Fotos, dibujos y arte lineal</div>
+  <div class="subtitle">Foto o diseño → icono APK</div>
 </header>
 
 <div class="container">
+
+  <!-- PREVIEW -->
+  <div class="card preview-card">
+    <canvas id="mainCanvas" width="192" height="192"></canvas>
+    <div class="preview-sizes" id="previewSizes"></div>
+  </div>
+
+  <!-- FOTO -->
   <div class="card">
-    <h2>💾 Mis Proyectos</h2>
+    <h2>📷 Foto</h2>
     <div class="row">
-      <input type="text" id="projName" placeholder="Nombre del proyecto" value="Mi_App">
-      <button class="btn btn-primary btn-sm" onclick="saveProject()">💾 Guardar</button>
+      <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)">
+      <button class="btn btn-outline btn-sm" onclick="quitarFoto()">✖️ Quitar</button>
     </div>
-    <div class="proj-list" id="projList"></div>
-  </div>
-
-  <div class="tabs">
-    <button class="tab active" data-tab="sizes">📐 Tamaños</button>
-    <button class="tab" data-tab="design">🎨 Diseño</button>
-    <button class="tab" data-tab="lineal">✏️ Arte Lineal</button>
-    <button class="tab" data-tab="export">📦 Exportar</button>
-  </div>
-
-  <!-- TAMAÑOS -->
-  <div id="tab-sizes" class="tab-panel">
-    <div class="card">
-      <h2>Tamaños Estándar Android</h2>
-      <div class="preview-wrap" id="previewArea"></div>
-      <div class="grid-sizes" id="sizeSelector">
-        <div class="size-item" data-size="mdpi">mdpi<br><small>48px</small></div>
-        <div class="size-item" data-size="hdpi">hdpi<br><small>72px</small></div>
-        <div class="size-item active" data-size="xhdpi">xhdpi<br><small>96px</small></div>
-        <div class="size-item" data-size="xxhdpi">xxhdpi<br><small>144px</small></div>
-        <div class="size-item" data-size="xxxhdpi">xxxhdpi<br><small>192px</small></div>
-        <div class="size-item" data-size="adap">Adaptativo<br><small>512px</small></div>
-        <div class="size-item" data-size="play">Play Store<br><small>512px</small></div>
-        <div class="size-item" data-size="round">Redondo<br><small>192px</small></div>
-      </div>
+    <div class="row" id="recorteRow" style="display:none">
+      <label>Recorte:</label>
+      <input type="range" id="recorteTam" min="20" max="100" value="80">
+      <button class="btn btn-primary btn-sm" onclick="aplicarRecorte()">✅ Aplicar</button>
     </div>
+    <p class="hint" id="fotoHint">Opcional. Sin foto, usas solo colores y texto.</p>
   </div>
 
   <!-- DISEÑO -->
-  <div id="tab-design" class="tab-panel" style="display:none">
-    <div class="card">
-      <h2>🎨 Diseño del Icono</h2>
-      <div class="canvas-container">
-        <canvas id="mainCanvas" width="192" height="192"></canvas>
-      </div>
+  <div class="card">
+    <h2>🎨 Diseño</h2>
+    <div class="row">
+      <label>Paletas:</label>
+      <div class="palette-scroll" id="paletas"></div>
+    </div>
+    <div class="row">
+      <label>Fondo:</label>
+      <select id="bgType" onchange="toggleBgOptions()">
+        <option value="solid">Sólido</option>
+        <option value="gradient">Gradiente</option>
+        <option value="none">Transparente</option>
+      </select>
+      <input type="color" id="bgColor1" value="#1976D2">
+      <input type="color" id="bgColor2" value="#0D47A1">
+    </div>
+    <div class="row">
+      <label>Forma:</label>
+      <select id="shapeType">
+        <option value="circle">Círculo</option>
+        <option value="square">Cuadrado</option>
+        <option value="rounded">Redondo</option>
+        <option value="triangle">Triángulo</option>
+        <option value="hexagon">Hexágono</option>
+        <option value="none">Sin forma</option>
+      </select>
+      <input type="color" id="shapeColor" value="#FFFFFF">
+      <input type="range" id="shapeSize" min="20" max="80" value="38" style="max-width:90px">
+    </div>
+  </div>
 
-      <!-- PASO 1: Subir imagen -->
-      <div class="step">
-        <span class="step-num">1</span>
-        <label class="step-title">Sube una foto o dibujo</label>
-      </div>
-      <div class="row">
-        <input type="file" id="designUpload" accept="image/*" onchange="cargarImagenDiseno(this)">
-      </div>
-      <p class="hint" id="designUploadHint">Opcional. Si no subes imagen, usa las plantillas de abajo.</p>
+  <!-- TEXTO -->
+  <div class="card">
+    <h2>🔤 Texto</h2>
+    <div class="row">
+      <input type="text" id="iconText" maxlength="3" placeholder="ABC">
+      <input type="color" id="textColor" value="#FFFFFF">
+    </div>
+    <div class="row">
+      <label>Posición:</label>
+      <select id="textPos">
+        <option value="center">Centro</option>
+        <option value="bottom">Abajo</option>
+        <option value="top">Arriba</option>
+      </select>
+      <label>Tamaño:</label>
+      <input type="range" id="fontSize" min="12" max="80" value="48" style="max-width:90px">
+    </div>
+    <div class="row">
+      <label>Negrita:</label>
+      <div class="toggle-switch on" id="fontBold" onclick="this.classList.toggle('on');draw()"></div>
+      <label>Sombra texto:</label>
+      <div class="toggle-switch" id="textShadow" onclick="this.classList.toggle('on');draw()"></div>
+    </div>
+  </div>
 
-      <!-- Recorte manual -->
-      <div id="recorteWrap" style="display:none">
-        <div class="row">
-          <label>Recorte:</label>
-          <button class="btn btn-outline btn-sm" onclick="activarRecorte()">✂️ Recortar</button>
-          <button class="btn btn-outline btn-sm" onclick="desactivarRecorte()">✖️ Cerrar</button>
-        </div>
-        <div class="row">
-          <label>Tamaño recorte:</label>
-          <input type="range" id="recorteTam" min="20" max="100" value="70">
-        </div>
-        <div class="row">
-          <button class="btn btn-primary btn-sm" onclick="aplicarRecorte()">✅ Aplicar recorte</button>
-        </div>
-        <p class="hint">Arrastra el círculo sobre la imagen para elegir qué parte será el icono.</p>
-      </div>
-
-      <!-- PASO 2: Fondo -->
-      <div class="step">
-        <span class="step-num">2</span>
-        <label class="step-title">Elige el fondo</label>
-      </div>
-      <div class="row">
-        <label>Tipo:</label>
-        <select id="bgType" onchange="toggleBgOptions()">
-          <option value="solid">Color Sólido</option>
-          <option value="gradient">Gradiente</option>
-          <option value="none">Transparente</option>
-        </select>
-      </div>
-      <div class="row" id="bgSolidRow">
-        <label>Color:</label>
-        <input type="color" id="bgColor1" value="#1976D2">
-      </div>
-      <div class="row" id="bgGradientRow" style="display:none">
-        <label>Color 1:</label>
-        <input type="color" id="bgColor1Grad" value="#1976D2">
-        <label>Color 2:</label>
-        <input type="color" id="bgColor2" value="#0D47A1">
-      </div>
-
-      <!-- Paletas rápidas -->
-      <div class="row" style="margin-top:8px">
-        <label>Paletas:</label>
-        <div class="palette-scroll" id="paletas"></div>
-      </div>
-
-      <!-- PASO 3: Forma -->
-      <div class="step">
-        <span class="step-num">3</span>
-        <label class="step-title">Elige la forma</label>
-      </div>
-      <div class="row">
-        <label>Figura:</label>
-        <select id="shapeType">
-          <option value="circle">Círculo</option>
-          <option value="square">Cuadrado</option>
-          <option value="rounded">Cuadrado Redondo</option>
-          <option value="triangle">Triángulo</option>
-          <option value="hexagon">Hexágono</option>
-          <option value="none">Sin figura</option>
-        </select>
-        <label>Color:</label>
-        <input type="color" id="shapeColor" value="#FFFFFF">
-      </div>
-      <div class="row">
-        <label>Tamaño:</label>
-        <input type="range" id="shapeSize" min="20" max="80" value="38">
-      </div>
-
-      <!-- PASO 4: Texto -->
-      <div class="step">
-        <span class="step-num">4</span>
-        <label class="step-title">Texto (opcional)</label>
-      </div>
-      <div class="row">
-        <input type="text" id="iconText" maxlength="3" placeholder="ABC">
-        <label>Color:</label>
-        <input type="color" id="textColor" value="#FFFFFF">
-      </div>
-      <div class="row">
-        <label>Tamaño:</label>
-        <input type="range" id="fontSize" min="12" max="80" value="48">
-        <label>Negrita:</label>
-        <div class="toggle-switch on" id="fontBold" onclick="this.classList.toggle('on');draw()"></div>
-      </div>
-
-      <div class="divider"></div>
-      <div class="row">
-        <label>Sombra:</label>
-        <div class="toggle-switch" id="shadowOn" onclick="this.classList.toggle('on');draw()"></div>
-        <label>Borde:</label>
-        <div class="toggle-switch" id="borderOn" onclick="this.classList.toggle('on');draw()"></div>
-      </div>
-
-      <!-- Botones -->
-      <div class="row">
-        <button class="btn btn-outline" onclick="undo()">↩️ Deshacer</button>
-        <button class="btn btn-outline" onclick="redo()">↪️ Rehacer</button>
-        <button class="btn btn-err" onclick="resetDesign()">🗑️ Reiniciar</button>
-      </div>
-
-      <!-- Mockup -->
-      <div class="divider"></div>
-      <h2>📱 Vista previa en pantalla de inicio</h2>
-      <div class="mockup-wrap">
-        <div class="mockup-phone">
-          <div class="mockup-icon">
-            <canvas id="mockupCanvas" width="60" height="60"></canvas>
-            <span id="mockupName">Mi_App</span>
-          </div>
-          <div class="mockup-dock">
-            <div class="dock-dot"></div>
-            <div class="dock-dot"></div>
-            <div class="dock-dot"></div>
-            <div class="dock-dot"></div>
-          </div>
-        </div>
-      </div>
+  <!-- EFECTOS -->
+  <div class="card">
+    <h2>✨ Efectos</h2>
+    <div class="row">
+      <label>Sombra general:</label>
+      <div class="toggle-switch" id="shadowOn" onclick="this.classList.toggle('on');draw()"></div>
+      <label>Borde:</label>
+      <div class="toggle-switch" id="borderOn" onclick="this.classList.toggle('on');draw()"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-outline" onclick="undo()">↩️ Deshacer</button>
+      <button class="btn btn-outline" onclick="redo()">↪️ Rehacer</button>
+      <button class="btn btn-err" onclick="resetTodo()">🗑️ Reiniciar</button>
     </div>
   </div>
 
   <!-- ARTE LINEAL -->
-  <div id="tab-lineal" class="tab-panel" style="display:none">
-    <div class="card">
-      <h2>✏️ Convertir Imagen a Arte Lineal</h2>
-      <div class="canvas-container">
-        <canvas id="linealCanvas" width="192" height="192"></canvas>
-      </div>
-      <div class="row">
-        <input type="file" id="linealUpload" accept="image/*" onchange="cargarImagenLineal(this)">
-      </div>
-      <p class="hint">Sube una foto → se convierte en dibujo de líneas.</p>
-
-      <div class="row">
-        <button class="btn btn-outline btn-sm" onclick="toggleRecorteLineal()">✂️ Recortar</button>
-        <button class="btn btn-outline btn-sm" onclick="autoUmbral()">🪄 Auto umbral</button>
-      </div>
-
-      <div id="recorteLinealWrap" style="display:none">
-        <div class="row">
-          <label>Tamaño recorte:</label>
-          <input type="range" id="recorteLinealTam" min="20" max="100" value="70">
-        </div>
-        <div class="row">
-          <button class="btn btn-primary btn-sm" onclick="aplicarRecorteLineal()">✅ Aplicar</button>
-        </div>
-        <p class="hint">Arrastra el círculo sobre la imagen para elegir el recorte.</p>
-      </div>
-
-      <div class="divider"></div>
-      <h3 class="section-title">🎛️ Estilo</h3>
-      <div class="row">
-        <label>Detalle:</label>
-        <input type="range" id="linealNivel" min="10" max="100" value="50">
-        <span id="linealNivelEtiqueta">50%</span>
-      </div>
-      <div class="row">
-        <label>Brillo:</label>
-        <input type="range" id="linealBrillo" min="-100" max="100" value="0">
-      </div>
-      <div class="row">
-        <label>Contraste:</label>
-        <input type="range" id="linealContraste" min="0" max="200" value="100">
-      </div>
-      <div class="row">
-        <label>Umbral:</label>
-        <input type="range" id="linealUmbral" min="10" max="240" value="128">
-      </div>
-      <div class="row">
-        <label>Color líneas:</label>
-        <input type="color" id="linealColorLineas" value="#000000">
-      </div>
-      <div class="row">
-        <label>Fondo:</label>
-        <input type="color" id="linealFondo" value="#FFFFFF">
-        <button class="btn btn-outline btn-sm" onclick="alternarFondoTransparente(this)">Transparente</button>
-      </div>
-
-      <div class="row">
-        <button class="btn btn-primary" onclick="aplicarArteLineal()">🔄 Regenerar</button>
-        <button class="btn btn-outline" onclick="reiniciarLineal()">↩️ Reiniciar</button>
-      </div>
-      <div class="row">
-        <button class="btn btn-accent" onclick="usarComoIcono()">✅ Usar como Icono</button>
-      </div>
+  <div class="card">
+    <h2>✏️ Arte Lineal</h2>
+    <p class="hint">Convierte la foto en dibujo de líneas. Requiere una foto cargada.</p>
+    <div class="row">
+      <button class="btn btn-primary" onclick="convertirArteLineal()">🔄 Convertir a líneas</button>
+      <button class="btn btn-outline" onclick="volverFotoOriginal()">↩️ Volver a foto</button>
+    </div>
+    <div class="row">
+      <label>Detalle:</label>
+      <input type="range" id="linealNivel" min="10" max="100" value="50">
+      <span id="linealNivelEtiqueta">50%</span>
+    </div>
+    <div class="row">
+      <label>Umbral:</label>
+      <input type="range" id="linealUmbral" min="10" max="240" value="128">
+      <button class="btn btn-outline btn-sm" onclick="autoUmbral()">🪄 Auto</button>
+    </div>
+    <div class="row">
+      <label>Color líneas:</label>
+      <input type="color" id="linealColorLineas" value="#000000">
+      <label>Fondo:</label>
+      <input type="color" id="linealFondo" value="#FFFFFF">
     </div>
   </div>
 
   <!-- EXPORTAR -->
-  <div id="tab-export" class="tab-panel" style="display:none">
-    <div class="card">
-      <h2>📦 Exportar Iconos</h2>
-      <p class="hint">Genera todos los tamaños Android en un ZIP listo para tu proyecto.</p>
-      <div class="row">
-        <button class="btn btn-primary" onclick="descargarTodos()">⬇️ Descargar ZIP completo</button>
-        <button class="btn btn-outline" onclick="descargarIndividual()">🖼️ Solo esta vista</button>
-      </div>
-      <div class="divider"></div>
-      <h3 class="section-title">📂 El ZIP incluye:</h3>
-      <ul class="zip-list">
-        <li>res/mipmap-*/ic_launcher.png (48 a 192px)</li>
-        <li>res/mipmap-*/ic_launcher_round.png (versión redonda)</li>
-        <li>play_store_icon.png (512px)</li>
-        <li>AndroidManifest.xml.txt</li>
-        <li>colors.xml.txt</li>
-        <li>ic_launcher.xml (adaptativo)</li>
-      </ul>
+  <div class="card">
+    <h2>📦 Exportar</h2>
+    <div class="row">
+      <button class="btn btn-primary" onclick="descargarTodos()">⬇️ Descargar ZIP completo</button>
+      <button class="btn btn-outline" onclick="descargarIndividual()">🖼️ Solo esta vista</button>
     </div>
+    <div class="row">
+      <label>Tamaño vista:</label>
+      <div class="size-pills" id="sizePills">
+        <button data-size="mdpi">48</button>
+        <button data-size="hdpi">72</button>
+        <button data-size="xhdpi" class="active">96</button>
+        <button data-size="xxhdpi">144</button>
+        <button data-size="xxxhdpi">192</button>
+        <button data-size="play">512</button>
+      </div>
+    </div>
+    <div class="row">
+      <input type="text" id="projName" placeholder="Nombre proyecto" value="Mi_App">
+      <button class="btn btn-outline btn-sm" onclick="guardarProyecto()">💾 Guardar</button>
+    </div>
+    <div class="proj-list" id="projList"></div>
   </div>
+
 </div>
 
 <script src="js/app.js"></script>
