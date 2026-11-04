@@ -1,19 +1,33 @@
-// ===== ESTADO GLOBAL =====
+// ===== ESTADO =====
 let currentSize = 'xhdpi';
 let history = [];
 let historyIndex = -1;
 let linealImageData = null;
-let iconImage = null;
+let designImage = null;
 let fondoTransparente = false;
 let debounceTimer = null;
 
+// Recorte
+let recorteActivo = false;
+let recorteX = 0.5, recorteY = 0.5, recorteTam = 0.7;
+let recorteTarget = 'design'; // 'design' o 'lineal'
+let recorteLinealActivo = false;
+let recorteLinealX = 0.5, recorteLinealY = 0.5, recorteLinealTam = 0.7;
+
 const sizes = { mdpi:48, hdpi:72, xhdpi:96, xxhdpi:144, xxxhdpi:192, adap:512, play:512, round:192 };
-const coloresPlantillas = {
-  mar:['#1976D2','#0D47A1'], caribe:['#FF9800','#E65100'], eco:['#4CAF50','#2E7D32'],
-  pro:['#9C27B0','#6A1B9A'], urgente:['#F44336','#C62828'], neutro:['#607D8B','#37474F']
+
+const PALETAS = {
+  Material: { bg1:'#1976D2', bg2:'#0D47A1', shape:'#FFFFFF', text:'#FFFFFF' },
+  Caribe:   { bg1:'#00BCD4', bg2:'#006064', shape:'#FFEB3B', text:'#FFFFFF' },
+  Atardecer:{ bg1:'#FF9800', bg2:'#E65100', shape:'#FFFFFF', text:'#FFFFFF' },
+  Bosque:   { bg1:'#4CAF50', bg2:'#1B5E20', shape:'#FFFFFF', text:'#FFFFFF' },
+  Neón:     { bg1:'#E91E63', bg2:'#3F51B5', shape:'#00E5FF', text:'#FFFFFF' },
+  Pastel:   { bg1:'#F8BBD0', bg2:'#B3E5FC', shape:'#FFFFFF', text:'#37474F' },
+  Pro:      { bg1:'#263238', bg2:'#000000', shape:'#FFFFFF', text:'#FFFFFF' },
+  Oro:      { bg1:'#FFD700', bg2:'#B8860B', shape:'#000000', text:'#000000' }
 };
 
-// ===== INICIALIZACIÓN =====
+// ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -23,7 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
       document.getElementById('tab-' + id).style.display = 'block';
       if(id === 'design') draw();
-      if(id === 'manifest') generarCodigosXML();
     });
   });
 
@@ -36,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Listeners de diseño (con debounce para no saturar historial)
   ['bgType','bgColor1','bgColor1Grad','bgColor2','shapeType','shapeColor','shapeSize',
    'iconText','textColor','fontSize'].forEach(id => {
     const el = document.getElementById(id);
@@ -46,8 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(el.tagName !== 'SELECT') el.addEventListener('input', handler);
   });
 
-  // Listeners de arte lineal (en vivo)
-  ['linealNivel','linealBrillo','linealContraste','linealUmbral','linealColorLineas','linealFondo','linealGrosor'].forEach(id => {
+  ['linealNivel','linealBrillo','linealContraste','linealUmbral','linealColorLineas','linealFondo'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', () => { if(linealImageData) aplicarArteLineal(); });
   });
@@ -56,23 +67,44 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('linealNivelEtiqueta').textContent = this.value + '%';
   });
 
-  // Listeners de icono (en vivo)
-  ['iconScale','iconOffsetX','iconOffsetY'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.addEventListener('input', dibujarIcono);
+  document.getElementById('projName').addEventListener('input', () => {
+    const mock = document.getElementById('mockupName');
+    if(mock) mock.textContent = document.getElementById('projName').value || 'Mi_App';
   });
 
+  initPaletas();
   draw();
   cargarProyectosGuardados();
   generarVistaPrevia();
-  generarCodigosXML();
 });
 
-// ===== DEBOUNCE =====
 function drawDebounced(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(draw, 400); }
 function generarVistaPreviaDebounced(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(generarVistaPrevia, 400); }
 
-// ===== DIBUJO PRINCIPAL (bug sombra corregido) =====
+// ===== PALETAS =====
+function initPaletas(){
+  const cont = document.getElementById('paletas');
+  cont.innerHTML = '';
+  Object.entries(PALETAS).forEach(([nombre, p]) => {
+    const d = document.createElement('div');
+    d.className = 'palette';
+    d.innerHTML = `<div class="palette-swatch" style="background:linear-gradient(135deg,${p.bg1},${p.bg2})"></div><span>${nombre}</span>`;
+    d.onclick = () => aplicarPaleta(p);
+    cont.appendChild(d);
+  });
+}
+
+function aplicarPaleta(p){
+  document.getElementById('bgType').value = 'gradient';
+  document.getElementById('bgColor1Grad').value = p.bg1;
+  document.getElementById('bgColor2').value = p.bg2;
+  document.getElementById('shapeColor').value = p.shape;
+  document.getElementById('textColor').value = p.text;
+  toggleBgOptions();
+  draw(); generarVistaPrevia();
+}
+
+// ===== DIBUJO =====
 function draw() {
   const canvas = document.getElementById('mainCanvas');
   if(!canvas) return;
@@ -80,37 +112,34 @@ function draw() {
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h);
 
-  // Fondo
-  const bgType = document.getElementById('bgType').value;
-  if(bgType === 'solid') {
-    ctx.fillStyle = document.getElementById('bgColor1').value;
-    ctx.fillRect(0,0,w,h);
-  } else if(bgType === 'gradient') {
-    const c1 = document.getElementById('bgColor1Grad').value;
-    const c2 = document.getElementById('bgColor2').value;
-    const g = ctx.createLinearGradient(0,0,w,h);
-    g.addColorStop(0, c1); g.addColorStop(1, c2);
-    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+  // Imagen de fondo (si se subió foto)
+  if(designImage) {
+    ctx.drawImage(designImage, 0, 0, w, h);
+  } else {
+    const bgType = document.getElementById('bgType').value;
+    if(bgType === 'solid') {
+      ctx.fillStyle = document.getElementById('bgColor1').value;
+      ctx.fillRect(0,0,w,h);
+    } else if(bgType === 'gradient') {
+      const g = ctx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0, document.getElementById('bgColor1Grad').value);
+      g.addColorStop(1, document.getElementById('bgColor2').value);
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    }
   }
 
-  // Sombra ANTES de dibujar figura/texto (bug corregido)
   const sombraOn = document.getElementById('shadowOn').classList.contains('on');
   if(sombraOn) {
     ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-  } else {
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+    ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
   }
 
-  // Figura
   const shapeType = document.getElementById('shapeType').value;
   const shapeColor = document.getElementById('shapeColor').value;
   const shapeSize = parseInt(document.getElementById('shapeSize').value)/100 * Math.min(w,h);
   const cx = w/2, cy = h/2;
 
-  if(shapeType !== 'none') {
+  if(shapeType !== 'none' && !designImage) {
     ctx.fillStyle = shapeColor;
     ctx.beginPath();
     if(shapeType === 'circle') ctx.arc(cx, cy, shapeSize/2, 0, Math.PI*2);
@@ -133,8 +162,8 @@ function draw() {
     ctx.fill();
   }
 
-  // Texto (sin sombra heredada)
   ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
   const texto = document.getElementById('iconText').value;
   if(texto) {
     ctx.fillStyle = document.getElementById('textColor').value;
@@ -145,7 +174,6 @@ function draw() {
     ctx.fillText(texto, w/2, h/2);
   }
 
-  // Borde
   if(document.getElementById('borderOn').classList.contains('on')) {
     ctx.strokeStyle = 'rgba(0,0,0,0.15)';
     ctx.lineWidth = 2;
@@ -153,6 +181,7 @@ function draw() {
   }
 
   guardarHistorial();
+  actualizarMockup();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -165,9 +194,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ===== HISTORIAL (bug 512 corregido) =====
 function guardarHistorial() {
-  // Solo guardar si cambió respecto al último
   const actual = document.getElementById('mainCanvas').toDataURL();
   if(history[historyIndex] === actual) return;
   historyIndex++;
@@ -181,10 +208,11 @@ function undo() {
     historyIndex--;
     const img = new Image();
     img.onload = () => {
-      const canvas = document.getElementById('mainCanvas');
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      const c = document.getElementById('mainCanvas');
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0,c.width,c.height);
+      actualizarMockup();
     };
     img.src = history[historyIndex];
   }
@@ -195,25 +223,118 @@ function redo() {
     historyIndex++;
     const img = new Image();
     img.onload = () => {
-      const canvas = document.getElementById('mainCanvas');
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      const c = document.getElementById('mainCanvas');
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0,c.width,c.height);
+      actualizarMockup();
     };
     img.src = history[historyIndex];
   }
 }
 
-// ===== PLANTILLAS Y CONTROLES =====
-function applyTemplate(nombre) {
-  const c = coloresPlantillas[nombre];
-  document.getElementById('bgType').value = 'gradient';
-  document.getElementById('bgColor1Grad').value = c[0];
-  document.getElementById('bgColor2').value = c[1];
-  toggleBgOptions();
-  draw(); generarVistaPrevia();
+function actualizarMockup() {
+  const mock = document.getElementById('mockupCanvas');
+  if(!mock) return;
+  const ctx = mock.getContext('2d');
+  ctx.clearRect(0,0,60,60);
+  ctx.drawImage(document.getElementById('mainCanvas'), 0, 0, 60, 60);
 }
 
+// ===== SUBIR IMAGEN AL DISEÑO =====
+function cargarImagenDiseno(input) {
+  const archivo = input.files[0];
+  if(!archivo) return;
+  const lector = new FileReader();
+  lector.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      // Ajustar a cuadrado centrado
+      designImage = recortarCuadrado(img, 0.5, 0.5, 1);
+      document.getElementById('recorteWrap').style.display = 'block';
+      document.getElementById('designUploadHint').textContent = '✅ Imagen cargada. Puedes recortarla con el botón de abajo.';
+      draw(); generarVistaPrevia();
+    };
+    img.src = e.target.result;
+  };
+  lector.readAsDataURL(archivo);
+}
+
+function recortarCuadrado(img, cx, cy, tam) {
+  const lado = Math.min(img.width, img.height) * tam;
+  const sx = img.width * cx - lado/2;
+  const sy = img.height * cy - lado/2;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, sx, sy, lado, lado, 0, 0, 512, 512);
+  const out = new Image();
+  out.src = c.toDataURL();
+  return out;
+}
+
+// ===== RECORTE =====
+function activarRecorte() {
+  if(!designImage) { mostrarMensaje('Primero sube una imagen', true); return; }
+  recorteActivo = true;
+  mostrarMensaje('✂️ Mueve el slider y aplica cuando estés listo');
+}
+
+function desactivarRecorte() {
+  recorteActivo = false;
+  document.getElementById('recorteWrap').style.display = 'none';
+}
+
+function aplicarRecorte() {
+  if(!designImage) return;
+  const tam = parseInt(document.getElementById('recorteTam').value) / 100;
+  designImage = recortarCuadrado(designImage, 0.5, 0.5, tam);
+  recorteActivo = false;
+  document.getElementById('recorteWrap').style.display = 'none';
+  draw(); generarVistaPrevia();
+  mostrarMensaje('✅ Recorte aplicado');
+}
+
+// ===== QUITAR FONDO UNIFORME (sin IA) =====
+function quitarFondoUniforme() {
+  if(!designImage) { mostrarMensaje('Primero sube una imagen', true); return; }
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(designImage, 0, 0, 512, 512);
+  const datos = ctx.getImageData(0, 0, 512, 512);
+
+  // Color de las 4 esquinas (promedio)
+  const esquinas = [
+    [0,0], [511,0], [0,511], [511,511]
+  ];
+  let rSum=0, gSum=0, bSum=0;
+  esquinas.forEach(([x,y]) => {
+    const i = (y*512 + x)*4;
+    rSum += datos.data[i]; gSum += datos.data[i+1]; bSum += datos.data[i+2];
+  });
+  const rBg = rSum/4, gBg = gSum/4, bBg = bSum/4;
+  const tolerancia = 40;
+
+  for(let i=0; i<datos.data.length; i+=4) {
+    const dr = datos.data[i] - rBg;
+    const dg = datos.data[i+1] - gBg;
+    const db = datos.data[i+2] - bBg;
+    const dist = Math.sqrt(dr*dr + dg*dg + db*db);
+    if(dist < tolerancia) datos.data[i+3] = 0;
+  }
+
+  ctx.putImageData(datos, 0, 0);
+  const out = new Image();
+  out.onload = () => {
+    designImage = out;
+    draw(); generarVistaPrevia();
+    mostrarMensaje('✅ Fondo eliminado (color uniforme)');
+  };
+  out.src = c.toDataURL();
+}
+
+// ===== CONTROLES =====
 function toggleBgOptions() {
   const tipo = document.getElementById('bgType').value;
   document.getElementById('bgSolidRow').style.display = tipo === 'solid' ? 'flex' : 'none';
@@ -221,6 +342,7 @@ function toggleBgOptions() {
 }
 
 function resetDesign() {
+  designImage = null;
   document.getElementById('bgType').value = 'gradient';
   document.getElementById('bgColor1Grad').value = '#1976D2';
   document.getElementById('bgColor2').value = '#0D47A1';
@@ -233,10 +355,11 @@ function resetDesign() {
   document.getElementById('fontBold').classList.add('on');
   document.getElementById('shadowOn').classList.remove('on');
   document.getElementById('borderOn').classList.remove('on');
+  document.getElementById('recorteWrap').style.display = 'none';
   toggleBgOptions(); draw(); generarVistaPrevia();
 }
 
-// ===== VISTA PREVIA DE TAMAÑOS =====
+// ===== VISTA PREVIA =====
 function generarVistaPrevia() {
   const contenedor = document.getElementById('previewArea');
   if(!contenedor) return;
@@ -328,17 +451,34 @@ function eliminarProyecto(indice) {
   mostrarMensaje('🗑️ Eliminado: ' + nombre);
 }
 
-// ===== ARTE LINEAL (bug proporción + detección de bordes corregido) =====
+// ===== ARTE LINEAL =====
 function cargarImagenLineal(input) {
   const archivo = input.files[0];
   if(!archivo) return;
   const lector = new FileReader();
   lector.onload = e => {
     const img = new Image();
-    img.onload = () => { linealImageData = img; aplicarArteLineal(); };
+    img.onload = () => {
+      linealImageData = recortarCuadrado(img, 0.5, 0.5, 1);
+      aplicarArteLineal();
+    };
     img.src = e.target.result;
   };
   lector.readAsDataURL(archivo);
+}
+
+function toggleRecorteLineal() {
+  const w = document.getElementById('recorteLinealWrap');
+  w.style.display = w.style.display === 'none' ? 'block' : 'none';
+}
+
+function aplicarRecorteLineal() {
+  if(!linealImageData) return;
+  const tam = parseInt(document.getElementById('recorteLinealTam').value) / 100;
+  linealImageData = recortarCuadrado(linealImageData, 0.5, 0.5, tam);
+  aplicarArteLineal();
+  document.getElementById('recorteLinealWrap').style.display = 'none';
+  mostrarMensaje('✅ Recorte aplicado');
 }
 
 function alternarFondoTransparente(btn) {
@@ -347,26 +487,37 @@ function alternarFondoTransparente(btn) {
   if(linealImageData) aplicarArteLineal();
 }
 
+function autoUmbral() {
+  if(!linealImageData) { mostrarMensaje('Primero sube una imagen', true); return; }
+  const c = document.createElement('canvas');
+  c.width = c.height = 192;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(linealImageData, 0, 0, 192, 192);
+  const datos = ctx.getImageData(0, 0, 192, 192);
+  let suma = 0;
+  for(let i=0; i<datos.data.length; i+=4) {
+    suma += datos.data[i]*0.299 + datos.data[i+1]*0.587 + datos.data[i+2]*0.114;
+  }
+  const prom = suma / (datos.data.length / 4);
+  const umbralAuto = Math.round(Math.max(30, Math.min(220, prom)));
+  document.getElementById('linealUmbral').value = umbralAuto;
+  aplicarArteLineal();
+  mostrarMensaje('✅ Umbral automático: ' + umbralAuto);
+}
+
 function aplicarArteLineal() {
   if(!linealImageData) return;
   const canvas = document.getElementById('linealCanvas');
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
 
-  // Fondo
   ctx.fillStyle = fondoTransparente ? 'rgba(0,0,0,0)' : document.getElementById('linealFondo').value;
   ctx.fillRect(0,0,w,h);
-
-  // Escalar manteniendo proporción (bug corregido)
-  const img = linealImageData;
-  const escala = Math.min(w/img.width, h/img.height);
-  const dw = img.width * escala, dh = img.height * escala;
-  const dx = (w-dw)/2, dy = (h-dh)/2;
 
   const temp = document.createElement('canvas');
   temp.width = w; temp.height = h;
   const tctx = temp.getContext('2d');
-  tctx.drawImage(img, dx, dy, dw, dh);
+  tctx.drawImage(linealImageData, 0, 0, w, h);
   const datos = tctx.getImageData(0,0,w,h);
 
   const brillo = parseInt(document.getElementById('linealBrillo').value);
@@ -374,17 +525,16 @@ function aplicarArteLineal() {
   const umbral = parseInt(document.getElementById('linealUmbral').value);
   const nivel = parseInt(document.getElementById('linealNivel').value)/100;
   const colorLinea = document.getElementById('linealColorLineas').value;
-  const grosor = parseInt(document.getElementById('linealGrosor').value);
 
   const r = parseInt(colorLinea.slice(1,3),16);
   const g = parseInt(colorLinea.slice(3,5),16);
   const b = parseInt(colorLinea.slice(5,7),16);
 
   const salida = ctx.createImageData(w,h);
-  const sensibilidad = 2.2 - nivel*1.8; // más complejidad = más sensible
+  const sensibilidad = 2.2 - nivel*1.8;
 
-  for(let y=1;y<h-1;y++){
-    for(let x=1;x<w-1;x++){
+  for(let y=1; y<h-1; y++){
+    for(let x=1; x<w-1; x++){
       const i = (y*w+x)*4;
       let gris = datos.data[i]*0.299 + datos.data[i+1]*0.587 + datos.data[i+2]*0.114;
       gris = ((gris-128)*contraste+128)+brillo;
@@ -405,8 +555,6 @@ function aplicarArteLineal() {
       } else if(!fondoTransparente){
         const c = hexARgb(document.getElementById('linealFondo').value);
         salida.data[i]=c.r; salida.data[i+1]=c.g; salida.data[i+2]=c.b; salida.data[i+3]=255;
-      } else {
-        salida.data[i+3]=0;
       }
     }
   }
@@ -424,13 +572,11 @@ function reiniciarLineal(){
   document.getElementById('linealUmbral').value=128;
   document.getElementById('linealColorLineas').value='#000000';
   document.getElementById('linealFondo').value='#FFFFFF';
-  document.getElementById('linealGrosor').value=2;
-  fondoTransparente=false;
   document.getElementById('linealNivelEtiqueta').textContent='50%';
+  fondoTransparente=false;
   if(linealImageData) aplicarArteLineal();
 }
 
-// Bug 3 corregido: ahora SÍ copia al diseño principal
 function usarComoIcono(){
   if(!linealImageData) { mostrarMensaje('Primero sube una imagen', true); return; }
   const origen = document.getElementById('linealCanvas');
@@ -438,83 +584,10 @@ function usarComoIcono(){
   const ctx = destino.getContext('2d');
   ctx.clearRect(0,0,destino.width,destino.height);
   ctx.drawImage(origen,0,0,destino.width,destino.height);
+  designImage = null;
   generarVistaPrevia();
   mostrarMensaje('✅ Arte lineal copiado al Diseño');
   document.querySelector('.tab[data-tab="design"]').click();
-}
-
-// ===== ICONO =====
-function processIcon(input) {
-  const archivo = input.files[0];
-  if(!archivo) return;
-  const lector = new FileReader();
-  lector.onload = e => {
-    iconImage = new Image();
-    iconImage.onload = () => dibujarIcono();
-    iconImage.src = e.target.result;
-  };
-  lector.readAsDataURL(archivo);
-}
-
-function dibujarIcono() {
-  if(!iconImage) return;
-  const canvas = document.getElementById('iconCanvas');
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0,0,w,h);
-  const escala = parseInt(document.getElementById('iconScale').value)/100;
-  const offX = parseInt(document.getElementById('iconOffsetX').value);
-  const offY = parseInt(document.getElementById('iconOffsetY').value);
-  const tam = Math.min(w,h)*escala;
-  ctx.drawImage(iconImage, (w-tam)/2+offX, (h-tam)/2+offY, tam, tam);
-}
-
-function usarIconoComoDiseno() {
-  if(!iconImage) { mostrarMensaje('Primero sube un icono', true); return; }
-  const origen = document.getElementById('iconCanvas');
-  const destino = document.getElementById('mainCanvas');
-  const ctx = destino.getContext('2d');
-  ctx.clearRect(0,0,destino.width,destino.height);
-  ctx.drawImage(origen,0,0,destino.width,destino.height);
-  generarVistaPrevia();
-  mostrarMensaje('✅ Icono copiado al Diseño');
-  document.querySelector('.tab[data-tab="design"]').click();
-}
-
-function resetIconSettings() {
-  document.getElementById('iconScale').value = 70;
-  document.getElementById('iconOffsetX').value = 0;
-  document.getElementById('iconOffsetY').value = 0;
-  dibujarIcono();
-}
-
-// ===== MANIFEST / XML =====
-function generarCodigosXML() {
-  const colorPrimario = document.getElementById('bgColor1Grad')?.value || '#1976D2';
-  document.getElementById('manifestCode').textContent =
-`<application
-    android:icon="@mipmap/ic_launcher"
-    android:roundIcon="@mipmap/ic_launcher_round"
-    android:label="@string/app_name"
-    android:allowBackup="true"
-    android:iconBackground="@color/ic_background" />`;
-
-  document.getElementById('colorsCode').textContent =
-`<resources>
-    <color name="ic_background">${colorPrimario}</color>
-</resources>`;
-
-  document.getElementById('adaptiveCode').textContent =
-`<?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_background"/>
-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-</adaptive-icon>`;
-}
-
-function copiarCodigo(id) {
-  const texto = document.getElementById(id).innerText;
-  navigator.clipboard.writeText(texto).then(() => mostrarMensaje('Código copiado ✅'));
 }
 
 // ===== EXPORTAR =====
@@ -530,16 +603,50 @@ function descargarIndividual() {
 async function descargarTodos() {
   const zip = new JSZip();
   const orig = document.getElementById('mainCanvas');
+
   for(const [tam, px] of Object.entries(sizes)) {
+    // Normal (cuadrado)
     const c = document.createElement('canvas');
     c.width = c.height = px;
-    c.getContext('2d').drawImage(orig,0,0,px,px);
+    c.getContext('2d').drawImage(orig, 0, 0, px, px);
     const datos = c.toDataURL('image/png').split(',')[1];
     const ruta = tam === 'play' ? 'play_store_icon.png' : `res/mipmap-${tam}/ic_launcher.png`;
     zip.file(ruta, datos, {base64:true});
+
+    // Redondo
+    const cr = document.createElement('canvas');
+    cr.width = cr.height = px;
+    const ctxr = cr.getContext('2d');
+    ctxr.beginPath();
+    ctxr.arc(px/2, px/2, px/2, 0, Math.PI*2);
+    ctxr.clip();
+    ctxr.drawImage(orig, 0, 0, px, px);
+    const datosR = cr.toDataURL('image/png').split(',')[1];
+    const rutaR = `res/mipmap-${tam}/ic_launcher_round.png`;
+    zip.file(rutaR, datosR, {base64:true});
   }
-  zip.file('AndroidManifest.xml.txt', document.getElementById('manifestCode').textContent);
-  zip.file('colors.xml.txt', document.getElementById('colorsCode').textContent);
+
+  const colorPrimario = document.getElementById('bgColor1Grad').value;
+  const manifiesto = `<application
+    android:icon="@mipmap/ic_launcher"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:label="@string/app_name"
+    android:allowBackup="true" />`;
+
+  const colores = `<resources>
+    <color name="ic_background">${colorPrimario}</color>
+</resources>`;
+
+  const adaptativo = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>`;
+
+  zip.file('AndroidManifest.xml.txt', manifiesto);
+  zip.file('colors.xml.txt', colores);
+  zip.file('ic_launcher.xml', adaptativo);
+
   const blob = await zip.generateAsync({type:'blob'});
   const enlace = document.createElement('a');
   enlace.href = URL.createObjectURL(blob);
