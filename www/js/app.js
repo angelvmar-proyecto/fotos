@@ -1,16 +1,11 @@
-// ===== SEGURIDAD: API KEY =====
-// Carga dinámica del plugin. Si no está disponible (web), usa localStorage como respaldo.
+// ===== SEGURIDAD API KEY =====
 let SecureStorage = null;
-
 async function cargarSecureStorage(){
   try {
     const mod = await import('@capacitor-community/secure-storage');
     SecureStorage = mod.SecureStorage;
-  } catch(e) {
-    SecureStorage = null;
-  }
+  } catch(e) { SecureStorage = null; }
 }
-
 let apiKeyGuardada = null;
 
 async function cargarApiKey(){
@@ -21,51 +16,38 @@ async function cargarApiKey(){
     } else {
       apiKeyGuardada = localStorage.getItem('pixabay_key');
     }
-  } catch(e) {
-    apiKeyGuardada = localStorage.getItem('pixabay_key');
-  }
+  } catch(e) { apiKeyGuardada = localStorage.getItem('pixabay_key'); }
   const input = document.getElementById('apiKeyInput');
   if(input && apiKeyGuardada) input.value = apiKeyGuardada;
 }
 
 async function guardarApiKey(){
-  const input = document.getElementById('apiKeyInput').value.trim();
-  if(!input) { mostrarMensaje('Escribe una key', true); return; }
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if(!v) { mostrarMensaje('Escribe una key', true); return; }
   try {
-    if(SecureStorage) {
-      await SecureStorage.set({ key: 'pixabay_key', value: input });
-    } else {
-      localStorage.setItem('pixabay_key', input);
-    }
-    apiKeyGuardada = input;
-    mostrarMensaje('✅ Key guardada de forma segura');
-  } catch(e) {
-    mostrarMensaje('Error al guardar la key', true);
-  }
+    if(SecureStorage) await SecureStorage.set({ key: 'pixabay_key', value: v });
+    else localStorage.setItem('pixabay_key', v);
+    apiKeyGuardada = v;
+    mostrarMensaje('✅ Key guardada');
+  } catch(e) { mostrarMensaje('Error al guardar', true); }
 }
 
 async function borrarApiKey(){
   try {
-    if(SecureStorage) {
-      await SecureStorage.remove({ key: 'pixabay_key' });
-    } else {
-      localStorage.removeItem('pixabay_key');
-    }
+    if(SecureStorage) await SecureStorage.remove({ key: 'pixabay_key' });
+    else localStorage.removeItem('pixabay_key');
     apiKeyGuardada = null;
     document.getElementById('apiKeyInput').value = '';
     mostrarMensaje('🗑️ Key borrada');
-  } catch(e) {
-    mostrarMensaje('Error al borrar', true);
-  }
+  } catch(e) { mostrarMensaje('Error', true); }
 }
 
 // ===== ESTADO =====
-let currentSize = 'xxxhdpi';
-let fotoOriginal = null;
-let fotoActual = null;
 let colorSeleccionado = 0;
 let debounceTimer = null;
-let fotosParaCombinar = [];
+let piezas = [];              // Array de piezas { img, x, y, w, h, rot, z }
+let piezaSeleccionada = -1;
+let MAX_PIEZAS = 4;
 
 const sizes = { mdpi:48, hdpi:72, xhdpi:96, xxhdpi:144, xxxhdpi:192, play:512 };
 
@@ -84,28 +66,22 @@ const COLORES = [
 document.addEventListener('DOMContentLoaded', async () => {
   await cargarSecureStorage();
   await cargarApiKey();
-
   initColores();
+  initTouchCanvas();
 
   ['iconText','textPos','fontSize'].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
-    el.addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(dibujarTodo, 250); });
-    el.addEventListener('change', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(dibujarTodo, 250); });
-  });
-
-  document.getElementById('linealNivel').addEventListener('input', () => {
-    if(fotoActual) convertirArteLineal();
+    el.addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => { draw(); preview(); }, 250); });
+    el.addEventListener('change', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => { draw(); preview(); }, 250); });
   });
 
   document.getElementById('busquedaInput').addEventListener('keydown', (e) => {
     if(e.key === 'Enter') buscarImagenes();
   });
 
-  dibujarTodo();
+  draw(); preview();
 });
-
-function dibujarTodo(){ draw(); preview(); }
 
 function initColores(){
   const cont = document.getElementById('colores');
@@ -119,113 +95,39 @@ function initColores(){
       document.querySelectorAll('.color-ball').forEach(x => x.classList.remove('selected'));
       b.classList.add('selected');
       colorSeleccionado = i;
-      dibujarTodo();
+      draw(); preview();
     };
     cont.appendChild(b);
   });
 }
 
-// ===== PIXABAY =====
-function abrirGaleria(){
-  if(!apiKeyGuardada) {
-    mostrarMensaje('Primero guarda tu API Key en ⚙️ Más opciones', true);
-    return;
-  }
-  document.getElementById('galeriaModal').classList.add('show');
-}
-
-function cerrarGaleria(){
-  document.getElementById('galeriaModal').classList.remove('show');
-}
-
-async function buscarImagenes(){
-  if(!apiKeyGuardada) { mostrarMensaje('Falta la API Key', true); return; }
-  const q = document.getElementById('busquedaInput').value.trim();
-  if(!q) { mostrarMensaje('Escribe qué buscar', true); return; }
-  const grid = document.getElementById('galeriaGrid');
-  grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Buscando...</p>';
-
-  try {
-    const url = `https://pixabay.com/api/?key=${apiKeyGuardada}&q=${encodeURIComponent(q)}&image_type=photo&per_page=9&lang=es&safesearch=true`;
-    const resp = await fetch(url);
-    if(!resp.ok) throw new Error('API error: ' + resp.status);
-    const data = await resp.json();
-    if(!data.hits || data.hits.length === 0){
-      grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Sin resultados.</p>';
-      return;
-    }
-    grid.innerHTML = '';
-    data.hits.forEach(hit => {
-      const div = document.createElement('div');
-      div.className = 'galeria-item';
-      div.innerHTML = `<img src="${hit.previewURL}" alt="${hit.tags}" loading="lazy">`;
-      div.onclick = () => seleccionarImagenPixabay(hit.webformatURL);
-      grid.appendChild(div);
-    });
-  } catch(err) {
-    grid.innerHTML = `<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px;color:#f44336">Error: ${err.message}</p>`;
-  }
-}
-
-async function seleccionarImagenPixabay(url){
-  mostrarMensaje('Descargando imagen...');
-  try {
-    const resp = await fetch(url);
-    const blob = await resp.blob();
-    const dataURL = await blobToDataURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      recortarCuadrado(img, 1, (recortada) => {
-        if(!fotoActual) {
-          fotoOriginal = recortada;
-          fotoActual = recortada;
-          document.getElementById('fotoAcciones').style.display = 'flex';
-          document.getElementById('arteLinealBox').style.display = 'block';
-          dibujarTodo();
-          mostrarMensaje('✅ Imagen cargada');
-        } else {
-          if(fotosParaCombinar.length === 0) fotosParaCombinar.push(fotoActual);
-          fotosParaCombinar.push(recortada);
-          mostrarCombinar();
-          mostrarMensaje('✅ Añadida para combinar');
-        }
-        cerrarGaleria();
-      });
-    };
-    img.src = dataURL;
-  } catch(err) {
-    mostrarMensaje('Error al descargar', true);
-  }
-}
-
-function blobToDataURL(blob){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-// ===== DIBUJO =====
+// ===== DIBUJO PRINCIPAL =====
 function draw() {
   const canvas = document.getElementById('mainCanvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0, 0, w, h);
+
+  // Fondo
   const color = COLORES[colorSeleccionado];
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, color.bg1);
+  g.addColorStop(1, color.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
 
-  if(fotoActual) {
-    ctx.drawImage(fotoActual, 0, 0, w, h);
-  } else {
-    const g = ctx.createLinearGradient(0, 0, w, h);
-    g.addColorStop(0, color.bg1);
-    g.addColorStop(1, color.bg2);
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-  }
+  // Piezas ordenadas por z
+  const ordenadas = piezas.map((p, i) => ({...p, idx: i})).sort((a,b) => a.z - b.z);
+  ordenadas.forEach(p => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.drawImage(p.img, -p.w/2, -p.h/2, p.w, p.h);
+    ctx.restore();
+  });
 
+  // Texto
   const texto = document.getElementById('iconText').value;
   if(texto) {
     const tam = parseInt(document.getElementById('fontSize').value);
@@ -234,8 +136,8 @@ function draw() {
     ctx.font = `bold ${tam}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
-    ctx.shadowBlur = 4;
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 5;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 2;
     let ty = h/2;
@@ -247,8 +149,37 @@ function draw() {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
   }
+
+  dibujarOverlay();
 }
 
+// ===== OVERLAY (borde de pieza seleccionada) =====
+function dibujarOverlay() {
+  const ov = document.getElementById('overlayCanvas');
+  if(!ov) return;
+  const ctx = ov.getContext('2d');
+  ctx.clearRect(0, 0, ov.width, ov.height);
+  if(piezaSeleccionada < 0 || !piezas[piezaSeleccionada]) return;
+  const p = piezas[piezaSeleccionada];
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.rot);
+  ctx.strokeStyle = '#1976D2';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 2]);
+  ctx.strokeRect(-p.w/2 - 2, -p.h/2 - 2, p.w + 4, p.h + 4);
+  ctx.setLineDash([]);
+  // Esquinas
+  ctx.fillStyle = '#1976D2';
+  [[-p.w/2, -p.h/2],[p.w/2, -p.h/2],[-p.w/2, p.h/2],[p.w/2, p.h/2]].forEach(([x,y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 2.5, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ===== PREVIEW TAMAÑOS =====
 function preview() {
   const cont = document.getElementById('previewSizes');
   if(!cont) return;
@@ -277,177 +208,397 @@ function actualizarMockup() {
   ctx.drawImage(document.getElementById('mainCanvas'), 0, 0, 60, 60);
 }
 
-// ===== FOTO =====
-function subirFoto(input) {
-  const archivo = input.files[0];
-  if(!archivo) return;
-  const lector = new FileReader();
-  lector.onload = e => {
+// ===== MENÚ AÑADIR PIEZA =====
+function abrirMenuPieza(){
+  if(piezas.length >= MAX_PIEZAS) { mostrarMensaje('Máximo ' + MAX_PIEZAS + ' piezas', true); return; }
+  document.getElementById('menuPiezaModal').classList.add('show');
+}
+function cerrarMenuPieza(){ document.getElementById('menuPiezaModal').classList.remove('show'); }
+
+// ===== CARGAR PIEZA DESDE ARCHIVO =====
+function cargarPiezaDesdeArchivo(input){
+  const f = input.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
     const img = new Image();
     img.onload = () => {
-      recortarCuadrado(img, 1, (recortada) => {
-        fotoOriginal = recortada;
-        fotoActual = recortada;
-        document.getElementById('fotoAcciones').style.display = 'flex';
-        document.getElementById('arteLinealBox').style.display = 'block';
-        fotosParaCombinar = [];
-        document.getElementById('combinarCard').style.display = 'none';
-        dibujarTodo();
-        mostrarMensaje('✅ Foto cargada');
-      });
+      cerrarMenuPieza();
+      abrirRecorte(img);
+      input.value = '';
     };
     img.src = e.target.result;
   };
-  lector.readAsDataURL(archivo);
+  reader.readAsDataURL(f);
 }
 
-function recortarCuadrado(img, tam, callback) {
-  const lado = Math.min(img.width, img.height) * tam;
-  const sx = img.width/2 - lado/2;
-  const sy = img.height/2 - lado/2;
-  const c = document.createElement('canvas');
-  c.width = c.height = 512;
-  c.getContext('2d').drawImage(img, sx, sy, lado, lado, 0, 0, 512, 512);
-  const out = new Image();
-  out.onload = () => callback(out);
-  out.src = c.toDataURL();
+// ===== PIXABAY =====
+function abrirGaleriaPixabay(){
+  if(!apiKeyGuardada) { mostrarMensaje('Configura tu API Key en ⚙️', true); return; }
+  cerrarMenuPieza();
+  document.getElementById('galeriaModal').classList.add('show');
+}
+function cerrarGaleria(){ document.getElementById('galeriaModal').classList.remove('show'); }
+
+async function buscarImagenes(){
+  const q = document.getElementById('busquedaInput').value.trim();
+  if(!q) { mostrarMensaje('Escribe qué buscar', true); return; }
+  const grid = document.getElementById('galeriaGrid');
+  grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Buscando...</p>';
+  try {
+    const url = `https://pixabay.com/api/?key=${apiKeyGuardada}&q=${encodeURIComponent(q)}&image_type=photo&per_page=9&lang=es&safesearch=true`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error('Error ' + resp.status);
+    const data = await resp.json();
+    if(!data.hits || data.hits.length === 0){
+      grid.innerHTML = '<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Sin resultados.</p>';
+      return;
+    }
+    grid.innerHTML = '';
+    data.hits.forEach(hit => {
+      const div = document.createElement('div');
+      div.className = 'galeria-item';
+      div.innerHTML = `<img src="${hit.previewURL}" alt="${hit.tags}">`;
+      div.onclick = () => seleccionarPixabay(hit.webformatURL);
+      grid.appendChild(div);
+    });
+  } catch(err) {
+    grid.innerHTML = `<p class="hint" style="grid-column:1/-1;text-align:center;padding:20px;color:#f44336">${err.message}</p>`;
+  }
 }
 
-function abrirRecorte() {
-  const row = document.getElementById('recorteRow');
-  row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+async function seleccionarPixabay(url){
+  mostrarMensaje('Descargando...');
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const dataURL = await blobToDataURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      cerrarGaleria();
+      abrirRecorte(img);
+    };
+    img.src = dataURL;
+  } catch(e) { mostrarMensaje('Error al descargar', true); }
 }
 
-function aplicarRecorte() {
-  if(!fotoOriginal) return;
-  const tam = parseInt(document.getElementById('recorteTam').value) / 100;
-  recortarCuadrado(fotoOriginal, tam, (recortada) => {
-    fotoActual = recortada;
-    draw(); preview();
-    document.getElementById('recorteRow').style.display = 'none';
-    mostrarMensaje('✅ Recorte aplicado');
+function blobToDataURL(blob){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
   });
 }
 
-function quitarFoto() {
-  fotoOriginal = null;
-  fotoActual = null;
-  fotosParaCombinar = [];
-  document.getElementById('fotoAcciones').style.display = 'none';
-  document.getElementById('recorteRow').style.display = 'none';
-  document.getElementById('arteLinealBox').style.display = 'none';
-  document.getElementById('combinarCard').style.display = 'none';
-  document.getElementById('fotoInput').value = '';
-  dibujarTodo();
+// ===== RECORTE =====
+let recorteImg = null;
+let recorteSel = { x:0, y:0, w:0, h:0 };
+let recorteArrastrando = false;
+let recorteInicio = null;
+
+function abrirRecorte(img){
+  recorteImg = img;
+  const modal = document.getElementById('recorteModal');
+  modal.classList.add('show');
+  const canvas = document.getElementById('recorteCanvas');
+  // Ajustar tamaño del canvas al contenedor
+  const maxW = Math.min(400, window.innerWidth - 60);
+  const escala = Math.min(maxW / img.width, 400 / img.height, 1);
+  canvas.width = img.width * escala;
+  canvas.height = img.height * escala;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  recorteSel = { x:0, y:0, w:0, h:0 };
+  initRecorteTouch();
 }
 
-// ===== COMBINAR =====
-function mostrarCombinar(){
-  document.getElementById('combinarCard').style.display = 'block';
-  document.getElementById('combinarHint').textContent = `Tienes ${fotosParaCombinar.length} fotos. Elige cómo combinarlas.`;
+function initRecorteTouch(){
+  const canvas = document.getElementById('recorteCanvas');
+  canvas.onpointerdown = (e) => {
+    const r = canvas.getBoundingClientRect();
+    recorteInicio = { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+    recorteArrastrando = true;
+    canvas.setPointerCapture(e.pointerId);
+  };
+  canvas.onpointermove = (e) => {
+    if(!recorteArrastrando) return;
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * canvas.width / r.width;
+    const y = (e.clientY - r.top) * canvas.height / r.height;
+    recorteSel.x = Math.min(recorteInicio.x, x);
+    recorteSel.y = Math.min(recorteInicio.y, y);
+    recorteSel.w = Math.abs(x - recorteInicio.x);
+    recorteSel.h = Math.abs(y - recorteInicio.y);
+    redibujarRecorte();
+  };
+  canvas.onpointerup = () => { recorteArrastrando = false; };
 }
 
-function cancelarCombinacion(){
-  fotosParaCombinar = [];
-  document.getElementById('combinarCard').style.display = 'none';
-  mostrarMensaje('Combinación cancelada');
-}
-
-function aplicarCombinacion(){
-  if(fotosParaCombinar.length < 2) { mostrarMensaje('Necesitas 2 fotos', true); return; }
-  const modo = document.getElementById('modoCombinar').value;
-  const c = document.createElement('canvas');
-  c.width = c.height = 512;
-  const ctx = c.getContext('2d');
-
-  if(modo === 'superponer') {
-    ctx.drawImage(fotosParaCombinar[0], 0, 0, 512, 512);
-    ctx.globalAlpha = 0.55;
-    ctx.drawImage(fotosParaCombinar[1], 0, 0, 512, 512);
-    ctx.globalAlpha = 1;
-  } else {
-    ctx.drawImage(fotosParaCombinar[0], 0, 0, 256, 512);
-    ctx.drawImage(fotosParaCombinar[1], 256, 0, 256, 512);
+function redibujarRecorte(){
+  const canvas = document.getElementById('recorteCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(recorteImg, 0, 0, canvas.width, canvas.height);
+  if(recorteSel.w > 0 && recorteSel.h > 0) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(recorteSel.x, recorteSel.y, recorteSel.w, recorteSel.h);
+    ctx.drawImage(recorteImg, 0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(recorteSel.x, recorteSel.y, recorteSel.w, recorteSel.h);
+    ctx.clip();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(recorteImg, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    ctx.strokeStyle = '#1976D2';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(recorteSel.x, recorteSel.y, recorteSel.w, recorteSel.h);
   }
+}
 
+function confirmarRecorte(){
+  if(recorteSel.w < 10 || recorteSel.h < 10) { mostrarMensaje('Selecciona un trozo más grande', true); return; }
+  const canvas = document.getElementById('recorteCanvas');
+  const escalaX = recorteImg.width / canvas.width;
+  const escalaY = recorteImg.height / canvas.height;
+  const c = document.createElement('canvas');
+  c.width = recorteSel.w * escalaX;
+  c.height = recorteSel.h * escalaY;
+  c.getContext('2d').drawImage(recorteImg,
+    recorteSel.x * escalaX, recorteSel.y * escalaY, recorteSel.w * escalaX, recorteSel.h * escalaY,
+    0, 0, c.width, c.height);
   const out = new Image();
   out.onload = () => {
-    fotoActual = out;
-    fotoOriginal = out;
-    fotosParaCombinar = [];
-    document.getElementById('combinarCard').style.display = 'none';
-    document.getElementById('fotoAcciones').style.display = 'flex';
-    document.getElementById('arteLinealBox').style.display = 'block';
-    dibujarTodo();
-    mostrarMensaje('✅ Fotos combinadas');
+    cerrarRecorte();
+    añadirPieza(out);
   };
   out.src = c.toDataURL();
 }
 
-// ===== ARTE LINEAL =====
-function convertirArteLineal() {
-  if(!fotoOriginal && !fotoActual) { mostrarMensaje('Primero sube una foto', true); return; }
-  const base = fotoOriginal || fotoActual;
-  const c = document.createElement('canvas');
-  c.width = c.height = 192;
-  const ctx = c.getContext('2d');
-  ctx.drawImage(base, 0, 0, 192, 192);
-  const datos = ctx.getImageData(0, 0, 192, 192);
-  const nivel = parseInt(document.getElementById('linealNivel').value) / 100;
-  const color = COLORES[colorSeleccionado];
+function cerrarRecorte(){
+  document.getElementById('recorteModal').classList.remove('show');
+  recorteImg = null;
+}
 
-  const rFondo = parseInt(color.bg2.slice(1,3),16);
-  const gFondo = parseInt(color.bg2.slice(3,5),16);
-  const bFondo = parseInt(color.bg2.slice(5,7),16);
-  const rLinea = parseInt(color.txt.slice(1,3),16);
-  const gLinea = parseInt(color.txt.slice(3,5),16);
-  const bLinea = parseInt(color.txt.slice(5,7),16);
+// ===== DIBUJO A MANO =====
+let dibujando = false;
+let dibujoCtx = null;
 
-  const salida = ctx.createImageData(192, 192);
-  const sensibilidad = 2.2 - nivel * 1.8;
+function abrirDibujo(){
+  cerrarMenuPieza();
+  document.getElementById('dibujoModal').classList.add('show');
+  const canvas = document.getElementById('dibujoCanvas');
+  canvas.width = 400; canvas.height = 400;
+  dibujoCtx = canvas.getContext('2d');
+  dibujoCtx.clearRect(0, 0, 400, 400);
+  dibujoCtx.strokeStyle = COLORES[colorSeleccionado].txt;
+  dibujoCtx.lineWidth = 8;
+  dibujoCtx.lineCap = 'round';
+  dibujoCtx.lineJoin = 'round';
+  canvas.onpointerdown = (e) => {
+    const r = canvas.getBoundingClientRect();
+    dibujoCtx.beginPath();
+    dibujoCtx.moveTo((e.clientX - r.left) * 400 / r.width, (e.clientY - r.top) * 400 / r.height);
+    dibujando = true;
+  };
+  canvas.onpointermove = (e) => {
+    if(!dibujando) return;
+    const r = canvas.getBoundingClientRect();
+    dibujoCtx.lineTo((e.clientX - r.left) * 400 / r.width, (e.clientY - r.top) * 400 / r.height);
+    dibujoCtx.stroke();
+  };
+  canvas.onpointerup = () => { dibujando = false; };
+}
 
-  for(let y = 1; y < 191; y++){
-    for(let x = 1; x < 191; x++){
-      const i = (y*192 + x) * 4;
-      const gris = datos.data[i]*0.299 + datos.data[i+1]*0.587 + datos.data[i+2]*0.114;
-      const iDer = (y*192 + (x+1)) * 4;
-      const iAba = ((y+1)*192 + x) * 4;
-      const gDer = datos.data[iDer]*0.299 + datos.data[iDer+1]*0.587 + datos.data[iDer+2]*0.114;
-      const gAba = datos.data[iAba]*0.299 + datos.data[iAba+1]*0.587 + datos.data[iAba+2]*0.114;
-      const diff = Math.max(Math.abs(gris - gDer), Math.abs(gris - gAba));
-      if(diff > 128 * sensibilidad * 0.3) {
-        salida.data[i] = rLinea; salida.data[i+1] = gLinea; salida.data[i+2] = bLinea; salida.data[i+3] = 255;
+function limpiarDibujo(){
+  dibujoCtx.clearRect(0, 0, 400, 400);
+}
+
+function confirmarDibujo(){
+  const canvas = document.getElementById('dibujoCanvas');
+  // Comprobar que hay algo dibujado
+  const datos = dibujoCtx.getImageData(0, 0, 400, 400);
+  let hayAlgo = false;
+  for(let i = 3; i < datos.data.length; i += 4) {
+    if(datos.data[i] > 0) { hayAlgo = true; break; }
+  }
+  if(!hayAlgo) { mostrarMensaje('Dibuja algo primero', true); return; }
+  const out = new Image();
+  out.onload = () => {
+    cerrarDibujo();
+    añadirPieza(out);
+  };
+  out.src = canvas.toDataURL();
+}
+
+function cerrarDibujo(){
+  document.getElementById('dibujoModal').classList.remove('show');
+}
+
+// ===== AÑADIR PIEZA =====
+function añadirPieza(img){
+  if(piezas.length >= MAX_PIEZAS) { mostrarMensaje('Máximo ' + MAX_PIEZAS + ' piezas', true); return; }
+  const canvas = document.getElementById('mainCanvas');
+  // Escala inicial: 50% del canvas
+  const escala = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.5;
+  const w = img.width * escala;
+  const h = img.height * escala;
+  piezas.push({
+    img,
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    w, h,
+    rot: 0,
+    z: piezas.length
+  });
+  piezaSeleccionada = piezas.length - 1;
+  renderListaPiezas();
+  draw(); preview();
+  mostrarMensaje('✅ Pieza añadida. Arrástrala para moverla.');
+}
+
+function renderListaPiezas(){
+  const card = document.getElementById('piezasCard');
+  const lista = document.getElementById('piezasLista');
+  if(piezas.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  lista.innerHTML = '';
+  piezas.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'pieza-thumb' + (i === piezaSeleccionada ? ' selected' : '');
+    const img = document.createElement('img');
+    img.src = p.img.src;
+    d.appendChild(img);
+    d.onclick = () => { piezaSeleccionada = i; renderListaPiezas(); draw(); };
+    lista.appendChild(d);
+  });
+}
+
+// ===== TOUCH SOBRE CANVAS =====
+let toqueActivo = false;
+let dedos = {};
+let estadoInicial = null;
+
+function initTouchCanvas(){
+  const canvas = document.getElementById('mainCanvas');
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height };
+  };
+  const hitPieza = (x, y) => {
+    // Buscar de arriba a abajo (mayor z primero)
+    const ordenadas = piezas.map((p, i) => ({...p, idx: i})).sort((a,b) => b.z - a.z);
+    for(const p of ordenadas) {
+      const dx = x - p.x, dy = y - p.y;
+      const cos = Math.cos(-p.rot), sin = Math.sin(-p.rot);
+      const lx = dx*cos - dy*sin;
+      const ly = dx*sin + dy*cos;
+      if(Math.abs(lx) <= p.w/2 && Math.abs(ly) <= p.h/2) return p.idx;
+    }
+    return -1;
+  };
+
+  canvas.onpointerdown = (e) => {
+    const pos = getPos(e);
+    const idx = hitPieza(pos.x, pos.y);
+    if(idx >= 0) {
+      piezaSeleccionada = idx;
+      // Traer al frente
+      piezas[idx].z = Math.max(...piezas.map(p => p.z)) + 1;
+      renderListaPiezas();
+      draw();
+      estadoInicial = { x: pos.x, y: pos.y, pieza: {...piezas[idx]} };
+      toqueActivo = true;
+      canvas.setPointerCapture(e.pointerId);
+    } else {
+      piezaSeleccionada = -1;
+      renderListaPiezas();
+      draw();
+    }
+  };
+
+  canvas.onpointermove = (e) => {
+    if(!toqueActivo || piezaSeleccionada < 0) return;
+    const pos = getPos(e);
+    const p = piezas[piezaSeleccionada];
+    p.x = estadoInicial.pieza.x + (pos.x - estadoInicial.x);
+    p.y = estadoInicial.pieza.y + (pos.y - estadoInicial.y);
+    draw();
+  };
+
+  canvas.onpointerup = () => { toqueActivo = false; };
+  canvas.onpointercancel = () => { toqueActivo = false; };
+
+  // Pellizco y rotación con dos dedos
+  canvas.addEventListener('touchmove', (e) => {
+    if(e.touches.length === 2 && piezaSeleccionada >= 0 && !toqueActivo) {
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const t1 = e.touches[0], t2 = e.touches[1];
+      const x1 = (t1.clientX - r.left) * canvas.width / r.width;
+      const y1 = (t1.clientY - r.top) * canvas.height / r.height;
+      const x2 = (t2.clientX - r.left) * canvas.width / r.width;
+      const y2 = (t2.clientY - r.top) * canvas.height / r.height;
+      const dist = Math.hypot(x2 - x1, y2 - y1);
+      const ang = Math.atan2(y2 - y1, x2 - x1);
+
+      if(!estadoInicial || estadoInicial.tipo !== 'pinch') {
+        estadoInicial = {
+          tipo: 'pinch',
+          dist, ang,
+          pieza: {...piezas[piezaSeleccionada]}
+        };
       } else {
-        salida.data[i] = rFondo; salida.data[i+1] = gFondo; salida.data[i+2] = bFondo; salida.data[i+3] = 255;
+        const p = piezas[piezaSeleccionada];
+        const escala = dist / estadoInicial.dist;
+        p.w = estadoInicial.pieza.w * escala;
+        p.h = estadoInicial.pieza.h * escala;
+        p.rot = estadoInicial.pieza.rot + (ang - estadoInicial.ang);
+        draw();
       }
     }
-  }
-  ctx.putImageData(salida, 0, 0);
+  }, { passive: false });
 
-  const out = new Image();
-  out.onload = () => {
-    fotoActual = out;
-    draw(); preview();
-    mostrarMensaje('✅ Convertido a dibujo');
-  };
-  out.src = c.toDataURL();
+  canvas.addEventListener('touchend', (e) => {
+    if(e.touches.length < 2) estadoInicial = null;
+  });
 }
 
-function volverFotoOriginal() {
-  if(!fotoOriginal) return;
-  fotoActual = fotoOriginal;
+// ===== ACCIONES PIEZA =====
+function centrarPieza(){
+  if(piezaSeleccionada < 0) return;
+  const canvas = document.getElementById('mainCanvas');
+  piezas[piezaSeleccionada].x = canvas.width / 2;
+  piezas[piezaSeleccionada].y = canvas.height / 2;
+  draw();
+}
+
+function traerAlFrente(){
+  if(piezaSeleccionada < 0) return;
+  piezas[piezaSeleccionada].z = Math.max(...piezas.map(p => p.z)) + 1;
+  draw();
+}
+
+function borrarPieza(){
+  if(piezaSeleccionada < 0) return;
+  piezas.splice(piezaSeleccionada, 1);
+  piezaSeleccionada = piezas.length > 0 ? 0 : -1;
+  renderListaPiezas();
   draw(); preview();
-  mostrarMensaje('↩️ Foto original');
 }
 
-function resetTodo() {
-  quitarFoto();
+function resetTodo(){
+  piezas = [];
+  piezaSeleccionada = -1;
   document.getElementById('iconText').value = '';
   document.getElementById('textPos').value = 'center';
   document.getElementById('fontSize').value = 48;
   colorSeleccionado = 0;
   document.querySelectorAll('.color-ball').forEach((b, i) => b.classList.toggle('selected', i === 0));
-  dibujarTodo();
+  renderListaPiezas();
+  draw(); preview();
   mostrarMensaje('🗑️ Reiniciado');
 }
 
@@ -455,8 +606,6 @@ function resetTodo() {
 async function descargarTodos() {
   const zip = new JSZip();
   const orig = document.getElementById('mainCanvas');
-  if(!orig || orig.width === 0) { mostrarMensaje('Nada que descargar', true); return; }
-
   const nombres = { mdpi:'mdpi', hdpi:'hdpi', xhdpi:'xhdpi', xxhdpi:'xxhdpi', xxxhdpi:'xxxhdpi' };
 
   for(const [tam, px] of Object.entries(sizes)) {
@@ -468,7 +617,6 @@ async function descargarTodos() {
       continue;
     }
     if(!nombres[tam]) continue;
-
     const c = document.createElement('canvas');
     c.width = c.height = px;
     c.getContext('2d').drawImage(orig, 0, 0, px, px);
@@ -485,13 +633,8 @@ async function descargarTodos() {
   }
 
   const color = COLORES[colorSeleccionado];
-  zip.file('AndroidManifest.xml.txt', `<application
-    android:icon="@mipmap/ic_launcher"
-    android:roundIcon="@mipmap/ic_launcher_round"
-    android:label="@string/app_name" />`);
-  zip.file('colors.xml.txt', `<resources>
-    <color name="ic_background">${color.bg1}</color>
-</resources>`);
+  zip.file('AndroidManifest.xml.txt', `<application android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="@string/app_name" />`);
+  zip.file('colors.xml.txt', `<resources><color name="ic_background">${color.bg1}</color></resources>`);
   zip.file('ic_launcher.xml', `<?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_background"/>
@@ -499,36 +642,28 @@ async function descargarTodos() {
 </adaptive-icon>`);
 
   const blob = await zip.generateAsync({type:'blob'});
-  const enlace = document.createElement('a');
-  enlace.href = URL.createObjectURL(blob);
-  enlace.download = 'iconos_creador.zip';
-  enlace.click();
-  URL.revokeObjectURL(enlace.href);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'iconos_creador.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
   mostrarMensaje('✅ ZIP descargado');
 }
 
-function mostrarMensaje(texto, esError) {
+function mostrarMensaje(txt, err){
   const m = document.getElementById('status');
-  m.textContent = texto;
-  m.classList.toggle('err', !!esError);
+  m.textContent = txt;
+  m.classList.toggle('err', !!err);
   m.classList.add('show');
-  setTimeout(() => m.classList.remove('show'), 2000);
+  setTimeout(() => m.classList.remove('show'), 2200);
 }
 
-// Exponer funciones globales para los onclick del HTML
-window.abrirGaleria = abrirGaleria;
-window.cerrarGaleria = cerrarGaleria;
-window.buscarImagenes = buscarImagenes;
-window.seleccionarImagenPixabay = seleccionarImagenPixabay;
-window.subirFoto = subirFoto;
-window.abrirRecorte = abrirRecorte;
-window.aplicarRecorte = aplicarRecorte;
-window.quitarFoto = quitarFoto;
-window.cancelarCombinacion = cancelarCombinacion;
-window.aplicarCombinacion = aplicarCombinacion;
-window.convertirArteLineal = convertirArteLineal;
-window.volverFotoOriginal = volverFotoOriginal;
-window.resetTodo = resetTodo;
-window.descargarTodos = descargarTodos;
-window.guardarApiKey = guardarApiKey;
-window.borrarApiKey = borrarApiKey;
+// Exponer globales
+Object.assign(window, {
+  abrirMenuPieza, cerrarMenuPieza, cargarPiezaDesdeArchivo,
+  abrirGaleriaPixabay, cerrarGaleria, buscarImagenes, seleccionarPixabay,
+  confirmarRecorte, cerrarRecorte,
+  abrirDibujo, limpiarDibujo, confirmarDibujo, cerrarDibujo,
+  centrarPieza, traerAlFrente, borrarPieza, resetTodo,
+  descargarTodos, guardarApiKey, borrarApiKey
+});

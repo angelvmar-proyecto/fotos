@@ -12,58 +12,46 @@
 <div class="status" id="status">¡Listo!</div>
 <header>
   📲 Creador de Iconos
-  <div class="subtitle">3 pasos y listo</div>
+  <div class="subtitle">Añade piezas, muévelas con el dedo</div>
 </header>
 
 <div class="container">
 
+  <!-- CANVAS PRINCIPAL CON PIEZAS -->
   <div class="preview-card">
-    <canvas id="mainCanvas" width="192" height="192"></canvas>
+    <div class="canvas-wrap">
+      <canvas id="mainCanvas" width="192" height="192"></canvas>
+      <canvas id="overlayCanvas" width="192" height="192"></canvas>
+    </div>
     <div class="preview-sizes" id="previewSizes"></div>
   </div>
 
+  <!-- AÑADIR PIEZA -->
   <div class="card">
-    <div class="step-title">1. Pon tu imagen</div>
-    <div class="row">
-      <label class="big-btn" for="fotoInput" style="flex:1">
-        📷 Elegir foto
-        <input type="file" id="fotoInput" accept="image/*" onchange="subirFoto(this)" hidden>
-      </label>
-      <button class="btn btn-outline" style="flex:1;padding:18px;border-radius:12px" onclick="abrirGaleria()">🖼️ Galería</button>
-    </div>
-    <div class="row" id="fotoAcciones" style="display:none">
-      <button class="btn btn-sm btn-outline" onclick="abrirRecorte()">✂️ Recortar</button>
-      <button class="btn btn-sm btn-outline" onclick="quitarFoto()">✖️ Quitar foto</button>
-    </div>
-    <div class="row" id="recorteRow" style="display:none">
-      <input type="range" id="recorteTam" min="20" max="100" value="80">
-      <button class="btn btn-sm btn-primary" onclick="aplicarRecorte()">✅ Aplicar recorte</button>
-    </div>
-    <p class="hint">Sin foto, creas un icono con color y texto.</p>
+    <button class="big-btn" onclick="abrirMenuPieza()">➕ Añadir pieza</button>
+    <p class="hint">Máximo 4 piezas. Arrastra para mover, pellizca para estirar, gira con dos dedos.</p>
   </div>
 
-  <div class="card" id="combinarCard" style="display:none">
-    <div class="step-title">🔗 Combinar fotos</div>
-    <p class="hint" id="combinarHint">Tienes 2 fotos. Elige cómo combinarlas.</p>
+  <!-- LISTA DE PIEZAS -->
+  <div class="card" id="piezasCard" style="display:none">
+    <div class="step-title">🧩 Tus piezas</div>
+    <div class="piezas-lista" id="piezasLista"></div>
     <div class="row">
-      <select id="modoCombinar">
-        <option value="superponer">Superponer (una encima de otra)</option>
-        <option value="lado">Lado a lado</option>
-      </select>
-    </div>
-    <div class="row">
-      <button class="btn btn-sm btn-primary" onclick="aplicarCombinacion()">✅ Combinar</button>
-      <button class="btn btn-sm btn-outline" onclick="cancelarCombinacion()">✖️ Cancelar</button>
+      <button class="btn btn-sm btn-outline" onclick="centrarPieza()">🎯 Centrar</button>
+      <button class="btn btn-sm btn-outline" onclick="traerAlFrente()">⬆️ Al frente</button>
+      <button class="btn btn-sm btn-err" onclick="borrarPieza()">🗑️ Borrar</button>
     </div>
   </div>
 
+  <!-- COLOR -->
   <div class="card">
-    <div class="step-title">2. Elige un color</div>
+    <div class="step-title">🎨 Color de fondo</div>
     <div class="colors" id="colores"></div>
   </div>
 
+  <!-- TEXTO -->
   <div class="card">
-    <div class="step-title">3. Ponle texto (opcional)</div>
+    <div class="step-title">🔤 Texto (opcional)</div>
     <div class="row">
       <input type="text" id="iconText" maxlength="3" placeholder="ABC">
     </div>
@@ -104,7 +92,7 @@
         <button class="btn btn-sm btn-primary" onclick="guardarApiKey()">💾 Guardar</button>
         <button class="btn btn-sm btn-outline" onclick="borrarApiKey()">🗑️</button>
       </div>
-      <p class="hint">Se guarda cifrada en tu teléfono. <a href="https://pixabay.com/api/docs/" target="_blank">¿Cómo obtenerla?</a></p>
+      <p class="hint">Se guarda cifrada. <a href="https://pixabay.com/api/docs/" target="_blank">¿Cómo obtenerla?</a></p>
     </div>
 
     <div class="adv-section">
@@ -117,18 +105,6 @@
       <input type="range" id="fontSize" min="12" max="80" value="48">
     </div>
 
-    <div class="adv-section" id="arteLinealBox" style="display:none">
-      <label class="adv-label">Convertir foto a dibujo</label>
-      <div class="row">
-        <button class="btn btn-sm btn-outline" onclick="convertirArteLineal()">✏️ Convertir</button>
-        <button class="btn btn-sm btn-outline" onclick="volverFotoOriginal()">↩️ Volver</button>
-      </div>
-      <div class="row">
-        <label>Detalle:</label>
-        <input type="range" id="linealNivel" min="10" max="100" value="50">
-      </div>
-    </div>
-
     <div class="adv-section">
       <button class="btn btn-sm btn-err" onclick="resetTodo()">🗑️ Reiniciar todo</button>
     </div>
@@ -136,6 +112,62 @@
 
 </div>
 
+<!-- MODAL MENÚ PIEZA -->
+<div class="modal" id="menuPiezaModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>➕ Añadir pieza</span>
+      <button class="modal-close" onclick="cerrarMenuPieza()">✖️</button>
+    </div>
+    <div class="menu-pieza">
+      <label class="menu-pieza-opt" for="piezaInput">
+        📷 Desde mi galería
+        <input type="file" id="piezaInput" accept="image/*" onchange="cargarPiezaDesdeArchivo(this)" hidden>
+      </label>
+      <button class="menu-pieza-opt" onclick="abrirGaleriaPixabay()">🖼️ Desde Pixabay</button>
+      <button class="menu-pieza-opt" onclick="abrirDibujo()">✏️ Dibujar con el dedo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RECORTE -->
+<div class="modal" id="recorteModal">
+  <div class="modal-content modal-full">
+    <div class="modal-header">
+      <span>✂️ Recorta el trozo que quieras</span>
+      <button class="modal-close" onclick="cerrarRecorte()">✖️</button>
+    </div>
+    <p class="hint" style="padding:0 14px">Arrastra el dedo sobre la imagen para seleccionar un trozo.</p>
+    <div class="recorte-canvas-wrap">
+      <canvas id="recorteCanvas"></canvas>
+    </div>
+    <div class="row" style="padding:0 14px 14px">
+      <button class="btn btn-primary" onclick="confirmarRecorte()">✅ Usar este trozo</button>
+      <button class="btn btn-outline" onclick="cerrarRecorte()">✖️ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DIBUJO -->
+<div class="modal" id="dibujoModal">
+  <div class="modal-content modal-full">
+    <div class="modal-header">
+      <span>✏️ Dibuja con el dedo</span>
+      <button class="modal-close" onclick="cerrarDibujo()">✖️</button>
+    </div>
+    <p class="hint" style="padding:0 14px">Dibuja lo que quieras. Se convertirá en una pieza.</p>
+    <div class="recorte-canvas-wrap">
+      <canvas id="dibujoCanvas" width="400" height="400"></canvas>
+    </div>
+    <div class="row" style="padding:0 14px 14px">
+      <button class="btn btn-primary" onclick="confirmarDibujo()">✅ Usar dibujo</button>
+      <button class="btn btn-outline" onclick="limpiarDibujo()">🧽 Limpiar</button>
+      <button class="btn btn-outline" onclick="cerrarDibujo()">✖️ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PIXABAY -->
 <div class="modal" id="galeriaModal">
   <div class="modal-content">
     <div class="modal-header">
@@ -143,8 +175,8 @@
       <button class="modal-close" onclick="cerrarGaleria()">✖️</button>
     </div>
     <div class="row" style="padding:0 12px">
-      <input type="text" id="busquedaInput" placeholder="Ej: gato, flor, montaña..." style="flex:2">
-      <button class="btn btn-primary" onclick="buscarImagenes()">🔍 Buscar</button>
+      <input type="text" id="busquedaInput" placeholder="Ej: gato, flor, sol..." style="flex:2">
+      <button class="btn btn-primary" onclick="buscarImagenes()">🔍</button>
     </div>
     <div class="galeria-grid" id="galeriaGrid">
       <p class="hint" style="grid-column:1/-1;text-align:center;padding:20px">Escribe algo y pulsa Buscar.</p>
