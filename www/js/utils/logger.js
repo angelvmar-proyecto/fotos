@@ -7,6 +7,5 @@ class Logger {
     console.log(`[${level}] ${message}`);
   }
   getLogs() { return this.logs; }
-  clear() { this.logs = []; this.startTime = Date.now(); }
 }
 const logger = new Logger();

@@ -15,32 +15,25 @@
     </style>
 </head>
 <body>
-    <h2 style="text-align:center; color:#4CAF50;">🔍 Detectores de Tablas</h2>
-    
+    <h2 style="text-align:center; color:#4CAF50;">Detectores de Tablas</h2>
     <div class="panel">
-        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
+        <button onclick="document.getElementById('imageInput').click()">Seleccionar Imagen</button>
         <input type="file" id="imageInput" accept="image/*" style="display: none;">
     </div>
-
     <div class="panel">
-        <div class="checkbox-item">
-            <input type="checkbox" id="algo_hough" value="Hough Transform" checked>
-            <label for="algo_hough">Hough Transform</label>
-        </div>
-        <br>
-        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+        <input type="checkbox" id="algo_hough" value="Hough Transform" checked>
+        <label for="algo_hough">Hough Transform</label>
+        <br><br>
+        <button onclick="runAlgorithms()" id="runButton" disabled>Ejecutar</button>
     </div>
-
     <div class="panel" id="vizPanel" style="display:none;">
         <div id="canvasContainer"><canvas id="mainCanvas"></canvas></div>
     </div>
-
     <div class="panel">
-        <h3>📝 Log</h3>
+        <h3>Log</h3>
         <div class="log-container" id="logContainer"></div>
     </div>
 
-    <!-- Carga estricta en orden -->
     <script src="js/utils/logger.js"></script>
     <script src="js/utils/image-processor.js"></script>
     <script src="js/visualization/canvas-manager.js"></script>
@@ -52,22 +45,18 @@
         let canvasManager, runner, selector, currentImageData = null;
 
         function initApp() {
-            alert("✅ JAVASCRIPT CARGADO CORRECTAMENTE");
-            logger.info("Iniciando aplicación...");
-            
+            alert("JAVASCRIPT CARGADO CORRECTAMENTE");
+            logger.info("Iniciando aplicacion...");
             try {
-                if (typeof HoughTransform === 'undefined') throw new Error("HoughTransform NO está definido");
-                
+                if (typeof HoughTransform === 'undefined') throw new Error("HoughTransform NO esta definido");
                 canvasManager = new CanvasManager('mainCanvas');
                 runner = new AlgorithmRunner();
                 selector = new IntelligentSelector();
-                
                 runner.registerAlgorithm(new HoughTransform());
-                
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-                logger.info("✅ Aplicación lista. Esperando imagen...");
+                logger.info("Aplicacion lista. Esperando imagen...");
             } catch (e) {
-                alert("ERROR CRÍTICO: " + e.message);
+                alert("ERROR CRITICO: " + e.message);
                 logger.error(e.message);
             }
         }
@@ -76,7 +65,6 @@
             const file = event.target.files[0];
             if (!file) return;
             logger.info("Cargando: " + file.name);
-            
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
@@ -85,12 +73,11 @@
                     canvas.width = img.width; canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
-                    
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     canvasManager.loadImage(currentImageData);
                     document.getElementById('runButton').disabled = false;
                     document.getElementById('vizPanel').style.display = 'block';
-                    logger.info("✅ Imagen cargada: " + img.width + "x" + img.height);
+                    logger.info("Imagen cargada: " + img.width + "x" + img.height);
                 };
                 img.src = e.target.result;
             };
@@ -100,25 +87,19 @@
         async function runAlgorithms() {
             if (!currentImageData) return;
             logger.info("Ejecutando algoritmos...");
-            
             const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
             const results = await runner.runSelected(selected, currentImageData);
-            
             results.forEach(res => {
                 canvasManager.addLayer(res.algorithm, (ctx) => {
                     ctx.strokeStyle = res.color;
                     ctx.lineWidth = 3;
                     res.lines.forEach(line => {
-                        ctx.beginPath();
-                        ctx.moveTo(line.x1, line.y1);
-                        ctx.lineTo(line.x2, line.y2);
-                        ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
                     });
                 });
             });
-            
             const diagnosis = selector.analyze(results);
-            logger.info("🏆 Mejor: " + diagnosis.best + " - " + diagnosis.reasons[0]);
+            logger.info("Mejor: " + diagnosis.best + " - " + diagnosis.reasons[0]);
         }
 
         function updateLog() {
@@ -127,7 +108,6 @@
             container.scrollTop = container.scrollHeight;
         }
         setInterval(updateLog, 500);
-
         window.addEventListener("load", initApp);
     </script>
 </body>
