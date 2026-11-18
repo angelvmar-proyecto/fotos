@@ -1,0 +1,6 @@
+{
+  "appId": "com.angelvmar.fotos",
+  "appName": "Fotos Lector",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

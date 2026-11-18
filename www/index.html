@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detectores de Tablas</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; }
+        .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; }
+        button:disabled { background: #555; }
+        #canvasContainer { width: 100%; height: 400px; background: #000; border: 2px solid #444; margin-bottom: 15px; }
+        #mainCanvas { width: 100%; height: 100%; }
+        .log-container { max-height: 300px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center; color:#4CAF50;">🔍 Detectores de Tablas</h2>
+    
+    <div class="panel">
+        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
+        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+    </div>
+
+    <div class="panel">
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_hough" value="Hough Transform" checked>
+            <label for="algo_hough">Hough Transform</label>
+        </div>
+        <br>
+        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+    </div>
+
+    <div class="panel" id="vizPanel" style="display:none;">
+        <div id="canvasContainer"><canvas id="mainCanvas"></canvas></div>
+    </div>
+
+    <div class="panel">
+        <h3>📝 Log</h3>
+        <div class="log-container" id="logContainer"></div>
+    </div>
+
+    <!-- Carga estricta en orden -->
+    <script src="js/utils/logger.js"></script>
+    <script src="js/utils/image-processor.js"></script>
+    <script src="js/visualization/canvas-manager.js"></script>
+    <script src="js/algorithms/hough.js"></script>
+    <script src="js/runner.js"></script>
+    <script src="js/diagnosis/intelligent-selector.js"></script>
+    
+    <script>
+        let canvasManager, runner, selector, currentImageData = null;
+
+        function initApp() {
+            alert("✅ JAVASCRIPT CARGADO CORRECTAMENTE");
+            logger.info("Iniciando aplicación...");
+            
+            try {
+                if (typeof HoughTransform === 'undefined') throw new Error("HoughTransform NO está definido");
+                
+                canvasManager = new CanvasManager('mainCanvas');
+                runner = new AlgorithmRunner();
+                selector = new IntelligentSelector();
+                
+                runner.registerAlgorithm(new HoughTransform());
+                
+                document.getElementById('imageInput').addEventListener('change', handleImageLoad);
+                logger.info("✅ Aplicación lista. Esperando imagen...");
+            } catch (e) {
+                alert("ERROR CRÍTICO: " + e.message);
+                logger.error(e.message);
+            }
+        }
+
+        function handleImageLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            logger.info("Cargando: " + file.name);
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    canvasManager.loadImage(currentImageData);
+                    document.getElementById('runButton').disabled = false;
+                    document.getElementById('vizPanel').style.display = 'block';
+                    logger.info("✅ Imagen cargada: " + img.width + "x" + img.height);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function runAlgorithms() {
+            if (!currentImageData) return;
+            logger.info("Ejecutando algoritmos...");
+            
+            const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            const results = await runner.runSelected(selected, currentImageData);
+            
+            results.forEach(res => {
+                canvasManager.addLayer(res.algorithm, (ctx) => {
+                    ctx.strokeStyle = res.color;
+                    ctx.lineWidth = 3;
+                    res.lines.forEach(line => {
+                        ctx.beginPath();
+                        ctx.moveTo(line.x1, line.y1);
+                        ctx.lineTo(line.x2, line.y2);
+                        ctx.stroke();
+                    });
+                });
+            });
+            
+            const diagnosis = selector.analyze(results);
+            logger.info("🏆 Mejor: " + diagnosis.best + " - " + diagnosis.reasons[0]);
+        }
+
+        function updateLog() {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = logger.getLogs().map(l => `[${l.timestamp}ms] [${l.level}] ${l.message}`).join('<br>');
+            container.scrollTop = container.scrollHeight;
+        }
+        setInterval(updateLog, 500);
+
+        window.addEventListener("load", initApp);
+    </script>
+</body>
+</html>
