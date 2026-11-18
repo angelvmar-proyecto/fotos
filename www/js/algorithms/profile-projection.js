@@ -24,8 +24,8 @@ class ProfileProjection {
       }
     }
     
-    // Detectar líneas horizontales
-    const hThreshold = width * 0.3;
+    // Detectar líneas horizontales (umbral reducido a 0.15)
+    const hThreshold = width * 0.15;
     let inLine = false;
     let lineStart = 0;
     
@@ -58,8 +58,8 @@ class ProfileProjection {
       }
     }
     
-    // Detectar líneas verticales
-    const vThreshold = height * 0.3;
+    // Detectar líneas verticales (umbral reducido a 0.15)
+    const vThreshold = height * 0.15;
     inLine = false;
     lineStart = 0;
     
