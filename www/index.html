@@ -11,32 +11,34 @@
         button:disabled { background: #555; cursor: not-allowed; }
         .btn-secondary { background: #2196F3; }
         .btn-danger { background: #f44336; }
-        #canvasContainer { position: relative; width: 100%; height: 400px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
+        #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
         #mainCanvas { display: block; touch-action: none; }
         .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
         .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
-        .log-container { max-height: 300px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
-        .checkbox-item { margin: 10px 0; padding: 8px; background: #333; border-radius: 4px; }
-        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; }
+        .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
+        .checkbox-item { margin: 8px 0; padding: 8px; background: #333; border-radius: 4px; }
+        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
         .checkbox-item label { cursor: pointer; }
         .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
         #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
         .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
-        .layer-toggle.inactive { opacity: 0.4; }
+        .layer-toggle.inactive { opacity: 0.35; }
+        #diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; }
         h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
         h3 { color: #4CAF50; margin-top: 0; }
     </style>
 </head>
 <body>
     <h2>🔍 Detectores de Tablas</h2>
-    
+
     <div class="panel">
         <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
         <input type="file" id="imageInput" accept="image/*" style="display: none;">
+        <span id="imgInfo" style="margin-left:10px; color:#999;"></span>
     </div>
 
     <div class="panel" id="vizPanel">
-        <h3>🎨 Visualización</h3>
+        <h3>🎨 Visualización (pellizca para zoom)</h3>
         <div id="canvasContainer">
             <canvas id="mainCanvas"></canvas>
             <div class="canvas-controls">
@@ -51,27 +53,33 @@
     <div class="panel">
         <h3>⚙️ Algoritmos</h3>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_hough" value="Hough Transform" checked>
-            <span class="color-dot" style="background: #FF0000;"></span>
-            <label for="algo_hough">Hough Transform</label>
+            <input type="checkbox" id="algo_hough" value="Hough Transform">
+            <span class="color-dot" style="background:#FF0000;"></span>
+            <label for="algo_hough">Hough Transform (lento)</label>
         </div>
         <div class="checkbox-item">
             <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
-            <span class="color-dot" style="background: #FFFF00;"></span>
+            <span class="color-dot" style="background:#FFFF00;"></span>
             <label for="algo_profile">Profile Projection</label>
         </div>
         <div class="checkbox-item">
             <input type="checkbox" id="algo_morph" value="Morphological" checked>
-            <span class="color-dot" style="background: #808080;"></span>
+            <span class="color-dot" style="background:#808080;"></span>
             <label for="algo_morph">Morphological</label>
         </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
+            <span class="color-dot" style="background:#800080;"></span>
+            <label for="algo_radar">Radar Matcher (kernel en cruz)</label>
+        </div>
         <br>
-        <button onclick="selectAll()">✅ Seleccionar Todos</button>
-        <button onclick="deselectAll()">❌ Deseleccionar Todos</button>
+        <button onclick="selectAll()">✅ Todos</button>
+        <button onclick="deselectAll()">❌ Ninguno</button>
         <br><br>
         <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
         <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
         <div id="statusIndicator"></div>
+        <div id="diagnosisBox" style="display:none;"></div>
     </div>
 
     <div class="panel">
@@ -88,9 +96,11 @@
     <script src="js/algorithms/hough.js"></script>
     <script src="js/algorithms/profile-projection.js"></script>
     <script src="js/algorithms/morphological.js"></script>
+    <script src="js/algorithms/radar-matcher.js"></script>
+    <script src="js/algorithms/radar-matcher.js"></script>
     <script src="js/runner.js"></script>
     <script src="js/diagnosis/intelligent-selector.js"></script>
-    
+
     <script>
         let canvasManager, runner, selector, currentImageData = null;
         let isRunning = false;
@@ -103,13 +113,15 @@
                 canvasManager = new CanvasManager('mainCanvas');
                 runner = new AlgorithmRunner();
                 selector = new IntelligentSelector();
-                
+
                 runner.registerAlgorithm(new HoughTransform());
                 runner.registerAlgorithm(new ProfileProjection());
                 runner.registerAlgorithm(new Morphological());
-                
+                runner.registerAlgorithm(new RadarMatcher());
+                runner.registerAlgorithm(new RadarMatcher());
+
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-                logger.info("Aplicacion lista. 3 algoritmos registrados.");
+                logger.info("Aplicacion lista. 4 algoritmos registrados.");
             } catch (e) {
                 alert("ERROR: " + e.message);
                 logger.error(e.message);
@@ -117,12 +129,12 @@
         }
 
         function selectAll() {
-            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true);
             logger.info("Todos los algoritmos seleccionados");
         }
 
         function deselectAll() {
-            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
             logger.info("Todos los algoritmos deseleccionados");
         }
 
@@ -139,11 +151,18 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    
-                    // IMPORTANTE: Recalcular dimensiones del canvas despues de que el panel sea visible
+
+                    // RESET del analisis de imagen anterior (bug 2)
+                    selector.imageAnalysis = null;
+                    algorithmResults = [];
+                    canvasManager.clearLayers();
+                    document.getElementById('layerControls').innerHTML = '';
+                    document.getElementById('diagnosisBox').style.display = 'none';
+
                     setTimeout(() => {
                         canvasManager.loadImage(currentImageData);
                         document.getElementById('runButton').disabled = false;
+                        document.getElementById('imgInfo').textContent = img.width + 'x' + img.height;
                         logger.info("Imagen cargada: " + img.width + "x" + img.height);
                     }, 100);
                 };
@@ -154,78 +173,105 @@
 
         async function runAlgorithms() {
             if (!currentImageData || isRunning) return;
-            
-            const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+
+            const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
             if (selected.length === 0) {
                 logger.error("No hay algoritmos seleccionados");
                 return;
             }
-            
+
             isRunning = true;
             cancelRequested = false;
             algorithmResults = [];
             canvasManager.clearLayers();
+            document.getElementById('layerControls').innerHTML = '';
+            document.getElementById('diagnosisBox').style.display = 'none';
             document.getElementById('runButton').disabled = true;
             document.getElementById('cancelButton').style.display = 'inline-block';
-            
-            logger.info("Ejecutando algoritmos seleccionados...");
+
             logger.info("Algoritmos a ejecutar: " + selected.join(", "));
-            
+
             for (let i = 0; i < selected.length; i++) {
-                if (cancelRequested) {
-                    logger.info("Ejecucion cancelada por el usuario");
-                    break;
-                }
-                
+                if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
+
                 const algoName = selected[i];
-                showStatus(`Procesando ${algoName}... (${i+1}/${selected.length})`);
-                
+                showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
+                await new Promise(r => setTimeout(r, 30));
+
                 try {
                     const result = await runner.runAlgorithm(algoName, currentImageData);
                     algorithmResults.push(result);
-                    
+
                     canvasManager.addLayer(result.algorithm, (ctx) => {
                         ctx.strokeStyle = result.color;
                         ctx.lineWidth = 2;
                         result.lines.forEach(line => {
-                            ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
+                            ctx.beginPath();
+                            ctx.moveTo(line.x1, line.y1);
+                            ctx.lineTo(line.x2, line.y2);
+                            ctx.stroke();
                         });
                     });
-                    
-                    logger.info(`${result.algorithm}: ${result.metrics.totalLines} lineas en ${result.metrics.executionTime}ms`);
+
+                    logger.info(result.algorithm + ": " + result.metrics.totalLines + " lineas en " + result.metrics.executionTime + "ms");
                 } catch (e) {
-                    logger.error(`Error en ${algoName}: ${e.message}`);
+                    logger.error("Error en " + algoName + ": " + e.message);
                 }
-                
-                await new Promise(resolve => setTimeout(resolve, 0));
+
+                await new Promise(r => setTimeout(r, 0));
             }
-            
+
             hideStatus();
-            
+
             if (algorithmResults.length > 0 && !cancelRequested) {
-                const diagnosis = selector.analyze(algorithmResults);
-                logger.info("Mejor algoritmo: " + diagnosis.best);
-                logger.info("Razones: " + diagnosis.reasons.join(" | "));
-                
-                updateLayerControls();
+                try {
+                    // FIX bug 1: pasar imageData como segundo argumento
+                    const diagnosis = selector.analyze(algorithmResults, currentImageData);
+                    showDiagnosis(diagnosis);
+                    updateLayerControls();
+                } catch (e) {
+                    logger.error("Error en diagnostico: " + e.message);
+                }
             }
-            
+
             isRunning = false;
             document.getElementById('runButton').disabled = false;
             document.getElementById('cancelButton').style.display = 'none';
         }
 
+        function showDiagnosis(diagnosis) {
+            const box = document.getElementById('diagnosisBox');
+            let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
+            html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
+
+            if (diagnosis.ranking && diagnosis.ranking.length > 1) {
+                html += '<br><br><strong>Ranking:</strong><br>';
+                html += diagnosis.ranking.map((r, i) =>
+                    (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) +
+                    ' (' + r.details.totalLines + ' lineas)'
+                ).join('<br>');
+            }
+
+            if (diagnosis.isLikelyTable === false) {
+                html += '<br><br><strong style="color:#ff9800;">⚠️ Esta imagen podria no ser una tabla.</strong>';
+            }
+
+            box.innerHTML = html;
+            box.style.display = 'block';
+
+            logger.info("Mejor algoritmo: " + diagnosis.best);
+            diagnosis.reasons.forEach(r => logger.info("  " + r));
+        }
+
         function updateLayerControls() {
             const container = document.getElementById('layerControls');
-            container.innerHTML = '<h3>Capas (toca para mostrar/ocultar)</h3>';
-            
+            container.innerHTML = '<strong>Capas (toca para mostrar/ocultar):</strong><br>';
+
             algorithmResults.forEach(result => {
                 const toggle = document.createElement('div');
                 toggle.className = 'layer-toggle';
-                toggle.innerHTML = `
-                    <span class="color-dot" style="background: ${result.color};"></span>
-                    <span>${result.algorithm}: ${result.metrics.totalLines} lineas</span>
-                `;
+                toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' +
+                                   result.algorithm + ': ' + result.metrics.totalLines;
                 toggle.onclick = () => {
                     canvasManager.toggleLayer(result.algorithm);
                     toggle.classList.toggle('inactive');
@@ -240,9 +286,9 @@
         }
 
         function showStatus(text) {
-            const indicator = document.getElementById('statusIndicator');
-            indicator.textContent = text;
-            indicator.style.display = 'block';
+            const el = document.getElementById('statusIndicator');
+            el.textContent = text;
+            el.style.display = 'block';
         }
 
         function hideStatus() {
@@ -252,8 +298,7 @@
         function copyLog() {
             const text = logger.getLogsText();
             navigator.clipboard.writeText(text).then(() => {
-                alert("Log copiado al portapapeles");
-                logger.info("Log copiado al portapapeles");
+                alert("Log copiado");
             }).catch(err => {
                 logger.error("Error al copiar: " + err);
             });
@@ -263,14 +308,14 @@
             logger.logs = [];
             logger.startTime = Date.now();
             updateLog();
-            logger.info("Log limpiado");
         }
 
         function updateLog() {
             const container = document.getElementById('logContainer');
-            container.innerHTML = logger.getLogs().map(l => `[${l.timestamp}ms] [${l.level}] ${l.message}`).join('<br>');
+            container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>');
             container.scrollTop = container.scrollHeight;
         }
+
         setInterval(updateLog, 500);
         window.addEventListener("load", initApp);
     </script>

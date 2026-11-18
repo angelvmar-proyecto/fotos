@@ -1,33 +1,44 @@
 class Preprocessor {
   constructor() {
     this.lastMetrics = {};
+    this.cache = null; // Cache de la última imagen procesada
+    this.cacheKey = null;
   }
 
   process(imageData) {
-    logger.info('Preprocesando imagen (Sauvola + deskew)...');
+    // Crear clave única para esta imagen
+    const key = imageData.width + 'x' + imageData.height + '_' + imageData.data.length;
+    
+    // Si ya procesamos esta imagen, devolver cache
+    if (this.cacheKey === key && this.cache) {
+      logger.info('  Usando preprocesamiento en cache');
+      return this.cache;
+    }
+    
+    logger.info('Preprocesando imagen (Sauvola optimizado + deskew)...');
     const start = Date.now();
     
     // 1. Escala de grises
     const gray = this.toGrayscale(imageData);
     logger.info('  Escala de grises OK');
     
-    // 2. Umbral adaptativo de Sauvola (mejor que Otsu para fotos)
-    const binary = this.sauvolaThreshold(gray, 15, 0.5);
-    logger.info('  Umbral Sauvola adaptativo OK');
+    // 2. Umbral adaptativo de Sauvola con imágenes integrales (100× más rápido)
+    const binary = this.sauvolaThresholdOptimized(gray, 15, 0.5);
+    logger.info('  Umbral Sauvola optimizado OK');
     
-    // 3. Detectar inversion (fondo oscuro?)
+    // 3. Detectar inversion
     const inverted = this.needsInversion(binary);
     const finalBinary = inverted ? this.invert(binary) : binary;
     if (inverted) logger.info('  Imagen invertida (fondo oscuro detectado)');
     
     // 4. Detectar y corregir skew
     const skewAngle = this.detectSkew(finalBinary);
-    logger.info(`  Angulo de inclinacion detectado: ${skewAngle.toFixed(2)} grados`);
+    logger.info('  Angulo de inclinacion: ' + skewAngle.toFixed(2) + ' grados');
     
     let result = finalBinary;
     if (Math.abs(skewAngle) > 0.3) {
       result = this.deskew(finalBinary, skewAngle);
-      logger.info(`  Deskew aplicado: ${skewAngle.toFixed(2)} grados`);
+      logger.info('  Deskew aplicado: ' + skewAngle.toFixed(2) + ' grados');
     }
     
     const time = Date.now() - start;
@@ -36,9 +47,18 @@ class Preprocessor {
       inverted,
       preprocessingTime: time
     };
-    logger.info(`Preprocesamiento completado en ${time}ms`);
+    logger.info('Preprocesamiento completado en ' + time + 'ms');
+    
+    // Guardar en cache
+    this.cache = result;
+    this.cacheKey = key;
     
     return result;
+  }
+
+  clearCache() {
+    this.cache = null;
+    this.cacheKey = null;
   }
 
   toGrayscale(imageData) {
@@ -54,8 +74,8 @@ class Preprocessor {
     return { data: gray, width, height };
   }
 
-  // Umbral adaptativo de Sauvola
-  sauvolaThreshold(gray, windowSize, k) {
+  // Sauvola con imágenes integrales: O(N) en vez de O(N×225)
+  sauvolaThresholdOptimized(gray, windowSize, k) {
     const data = gray.data;
     const width = gray.width;
     const height = gray.height;
@@ -63,30 +83,48 @@ class Preprocessor {
     const half = Math.floor(windowSize / 2);
     const R = 128;
     
-    // Para cada pixel, calcular media y desviacion estandar local
+    // Construir imágenes integrales
+    const integral = new Float64Array((width + 1) * (height + 1));
+    const integralSq = new Float64Array((width + 1) * (height + 1));
+    
+    // Llenar imágenes integrales
+    for (let y = 0; y < height; y++) {
+      let rowSum = 0, rowSumSq = 0;
+      for (let x = 0; x < width; x++) {
+        const val = data[y * width + x];
+        rowSum += val;
+        rowSumSq += val * val;
+        
+        const idx = (y + 1) * (width + 1) + (x + 1);
+        integral[idx] = rowSum + integral[y * (width + 1) + (x + 1)];
+        integralSq[idx] = rowSumSq + integralSq[y * (width + 1) + (x + 1)];
+      }
+    }
+    
+    // Aplicar umbral usando imágenes integrales (O(1) por píxel)
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        let sum = 0, sumSq = 0, count = 0;
+        const x1 = Math.max(0, x - half);
+        const y1 = Math.max(0, y - half);
+        const x2 = Math.min(width - 1, x + half);
+        const y2 = Math.min(height - 1, y + half);
         
-        const yStart = Math.max(0, y - half);
-        const yEnd = Math.min(height - 1, y + half);
-        const xStart = Math.max(0, x - half);
-        const xEnd = Math.min(width - 1, x + half);
+        const count = (x2 - x1 + 1) * (y2 - y1 + 1);
         
-        for (let yy = yStart; yy <= yEnd; yy++) {
-          for (let xx = xStart; xx <= xEnd; xx++) {
-            const val = data[yy * width + xx];
-            sum += val;
-            sumSq += val * val;
-            count++;
-          }
-        }
+        // Calcular suma y suma de cuadrados usando imágenes integrales
+        const i1 = y1 * (width + 1) + x1;
+        const i2 = y1 * (width + 1) + (x2 + 1);
+        const i3 = (y2 + 1) * (width + 1) + x1;
+        const i4 = (y2 + 1) * (width + 1) + (x2 + 1);
+        
+        const sum = integral[i4] - integral[i2] - integral[i3] + integral[i1];
+        const sumSq = integralSq[i4] - integralSq[i2] - integralSq[i3] + integralSq[i1];
         
         const mean = sum / count;
         const variance = (sumSq / count) - (mean * mean);
         const std = Math.sqrt(Math.max(0, variance));
         
-        // Formula de Sauvola
+        // Fórmula de Sauvola
         const threshold = mean * (1 + k * (std / R - 1));
         
         binary[y * width + x] = data[y * width + x] < threshold ? 1 : 0;
@@ -123,7 +161,7 @@ class Preprocessor {
     const width = binary.width;
     const height = binary.height;
     
-    // Para velocidad, trabajar con version reducida
+    // Para velocidad, trabajar con versión reducida
     const step = 4;
     let bestAngle = 0;
     let bestScore = -Infinity;
@@ -207,7 +245,7 @@ class Preprocessor {
   }
 
   deskew(binary, angle) {
-    logger.info(`  Aplicando deskew de ${angle.toFixed(2)} grados...`);
+    logger.info('  Aplicando deskew de ' + angle.toFixed(2) + ' grados...');
     return this.rotateBinary(binary, angle);
   }
 
