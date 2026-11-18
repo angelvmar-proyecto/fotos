@@ -27,7 +27,7 @@ class IntelligentSelector {
       const total = horizontal.length + vertical.length;
       const balanceScore = total > 0 ? 1 - Math.abs(horizontal.length - vertical.length) / total : 0;
       
-      // Métrica 4: Ortogonalidad real (desviación de 90°)
+      // Métrica 4: Ortogonalidad real
       let orthogonalityScore = 0;
       if (horizontal.length > 0 && vertical.length > 0) {
         let totalDeviation = 0;
@@ -44,7 +44,7 @@ class IntelligentSelector {
         orthogonalityScore = 1 - Math.min(avgDeviation / 15, 1);
       }
       
-      // Métrica 5: Regularidad de espaciado (solo si hay suficientes líneas)
+      // Métrica 5: Regularidad de espaciado (CORREGIDO para evitar NaN)
       let regularityScore = 0;
       if (horizontal.length >= 3) {
         const sorted = horizontal.map(l => l.y1).sort((a, b) => a - b);
@@ -53,12 +53,16 @@ class IntelligentSelector {
           gaps.push(sorted[i] - sorted[i-1]);
         }
         const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-        const variance = gaps.reduce((sum, g) => sum + (g - meanGap) ** 2, 0) / gaps.length;
-        const stdDev = Math.sqrt(variance);
-        regularityScore = 1 - Math.min(stdDev / meanGap, 1);
+        
+        // EVITAR DIVISION POR CERO
+        if (meanGap > 0) {
+          const variance = gaps.reduce((sum, g) => sum + (g - meanGap) ** 2, 0) / gaps.length;
+          const stdDev = Math.sqrt(variance);
+          regularityScore = 1 - Math.min(stdDev / meanGap, 1);
+        }
       }
       
-      // Métrica 6: Ratio de duplicación (si hay métricas de preprocesamiento)
+      // Métrica 6: Ratio de duplicación
       let duplicationScore = 1;
       if (metrics.linesBeforeMerge && metrics.linesAfterMerge) {
         duplicationScore = metrics.linesAfterMerge / metrics.linesBeforeMerge;

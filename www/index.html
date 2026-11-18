@@ -11,7 +11,6 @@
         button:disabled { background: #555; cursor: not-allowed; }
         .btn-secondary { background: #2196F3; }
         .btn-danger { background: #f44336; }
-        .btn-small { padding: 8px 12px; font-size: 14px; }
         #canvasContainer { position: relative; width: 100%; height: 400px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
         #mainCanvas { display: block; touch-action: none; }
         .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
@@ -24,7 +23,6 @@
         #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
         .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
         .layer-toggle.inactive { opacity: 0.4; }
-        .layer-toggle .color-dot { margin-right: 5px; }
         h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
         h3 { color: #4CAF50; margin-top: 0; }
     </style>
@@ -35,6 +33,19 @@
     <div class="panel">
         <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
         <input type="file" id="imageInput" accept="image/*" style="display: none;">
+    </div>
+
+    <div class="panel" id="vizPanel">
+        <h3>🎨 Visualización</h3>
+        <div id="canvasContainer">
+            <canvas id="mainCanvas"></canvas>
+            <div class="canvas-controls">
+                <button onclick="canvasManager.zoomIn()">➕</button>
+                <button onclick="canvasManager.zoomOut()">➖</button>
+                <button onclick="canvasManager.reset()">🔄</button>
+            </div>
+        </div>
+        <div id="layerControls"></div>
     </div>
 
     <div class="panel">
@@ -61,19 +72,6 @@
         <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
         <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
         <div id="statusIndicator"></div>
-    </div>
-
-    <div class="panel" id="vizPanel" style="display:none;">
-        <h3>🎨 Visualización</h3>
-        <div id="canvasContainer">
-            <canvas id="mainCanvas"></canvas>
-            <div class="canvas-controls">
-                <button onclick="canvasManager.zoomIn()" title="Acercar">➕</button>
-                <button onclick="canvasManager.zoomOut()" title="Alejar">➖</button>
-                <button onclick="canvasManager.reset()" title="Resetear vista">🔄</button>
-            </div>
-        </div>
-        <div id="layerControls"></div>
     </div>
 
     <div class="panel">
@@ -141,10 +139,13 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    canvasManager.loadImage(currentImageData);
-                    document.getElementById('runButton').disabled = false;
-                    document.getElementById('vizPanel').style.display = 'block';
-                    logger.info("Imagen cargada: " + img.width + "x" + img.height);
+                    
+                    // IMPORTANTE: Recalcular dimensiones del canvas despues de que el panel sea visible
+                    setTimeout(() => {
+                        canvasManager.loadImage(currentImageData);
+                        document.getElementById('runButton').disabled = false;
+                        logger.info("Imagen cargada: " + img.width + "x" + img.height);
+                    }, 100);
                 };
                 img.src = e.target.result;
             };
