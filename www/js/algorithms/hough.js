@@ -5,23 +5,26 @@ class HoughTransform {
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Hough Transform (version mejorada)');
+    logger.info('Iniciando Hough Transform (sobre escala de grises)');
     const start = Date.now();
     
-    // 1. Preprocesamiento (Otsu + deskew)
+    // 1. Preprocesamiento (Sauvola + deskew)
     const preprocessed = preprocessor.process(imageData);
     const preMetrics = preprocessor.getMetrics();
     
-    // 2. Reescalar para velocidad (max 1000px)
-    const { data: scaled, width: sw, height: sh, scale } = this.downscale(preprocessed, 1000);
+    // 2. Trabajar sobre escala de grises original (no binarizada)
+    const gray = this.toGrayscale(imageData);
+    
+    // 3. Reescalar para velocidad (max 1000px)
+    const { data: scaled, width: sw, height: sh, scale } = this.downscale(gray, 1000);
     logger.info(`  Imagen reescalada a ${sw}x${sh} (factor: ${scale.toFixed(3)})`);
     
-    // 3. Deteccion de bordes Sobel
+    // 4. Deteccion de bordes Sobel sobre escala de grises
     const edges = this.sobelEdges(scaled, sw, sh);
     const edgeCount = edges.reduce((a, b) => a + (b > 50 ? 1 : 0), 0);
     logger.info(`  Pixeles de borde: ${edgeCount}`);
     
-    // 4. Hough en angulos de tabla (0+-15 y 90+-15)
+    // 5. Hough en angulos de tabla (0+-15 y 90+-15)
     const angles = [];
     for (let a = -15; a <= 15; a++) angles.push(a);
     for (let a = 75; a <= 105; a++) angles.push(a);
@@ -36,7 +39,7 @@ class HoughTransform {
     const rhoRange = maxRho * 2 + 1;
     const acc = new Int32Array(angles.length * rhoRange);
     
-    // 5. Votacion
+    // 6. Votacion
     for (let y = 0; y < sh; y++) {
       for (let x = 0; x < sw; x++) {
         if (edges[y * sw + x] > 50) {
@@ -49,11 +52,11 @@ class HoughTransform {
       }
     }
     
-    // 6. Umbral adaptativo
+    // 7. Umbral adaptativo
     const threshold = Math.max(30, Math.floor(edgeCount * 0.003));
     logger.info(`  Umbral adaptativo: ${threshold}`);
     
-    // 7. NMS + extraccion de picos
+    // 8. NMS + extraccion de picos
     const peaks = [];
     for (let i = 0; i < trigTable.length; i++) {
       for (let r = 1; r < rhoRange - 1; r++) {
@@ -85,17 +88,17 @@ class HoughTransform {
     }
     logger.info(`  Picos tras NMS: ${peaks.length}`);
     
-    // 8. Fusion de colineales (angulo +-2, rho +-4)
+    // 9. Fusion de colineales (angulo +-2, rho +-4)
     const merged = this.mergeColinear(peaks);
     logger.info(`  Lineas tras fusion: ${merged.length}`);
     
-    // 9. Convertir a segmentos reales (recortar a bordes de imagen)
+    // 10. Convertir a segmentos reales
     const segments = merged
-      .map(p => this.lineToSegment(p, sw, sh, edges))
+      .map(p => this.lineToSegment(p, sw, sh))
       .filter(s => s !== null && s.length > 30)
-      .slice(0, 300); // Tope duro
+      .slice(0, 300);
     
-    // 10. Reescalar coordenadas al tamano original
+    // 11. Reescalar coordenadas al tamano original
     const lines = segments.map(s => ({
       x1: Math.round(s.x1 / scale),
       y1: Math.round(s.y1 / scale),
@@ -117,12 +120,24 @@ class HoughTransform {
         executionTime: time,
         preprocessingTime: preMetrics.preprocessingTime,
         skewAngle: preMetrics.skewAngle,
-        otsuThreshold: preMetrics.otsuThreshold,
         edgePixels: edgeCount,
         peaksAfterNMS: peaks.length,
         afterMerge: merged.length
       } 
     };
+  }
+  
+  toGrayscale(imageData) {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    const gray = new Uint8ClampedArray(width * height);
+    
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      gray[j] = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+    }
+    
+    return { data: gray, width, height };
   }
   
   downscale(image, maxSize) {
@@ -202,27 +217,23 @@ class HoughTransform {
     return merged;
   }
   
-  lineToSegment(params, width, height, edges) {
+  lineToSegment(params, width, height) {
     const { angle, rho, cos, sin } = params;
     
-    // Calcular extremos de la linea en la imagen
     let x1, y1, x2, y2;
     
     if (Math.abs(cos) > Math.abs(sin)) {
-      // Linea mas vertical
       y1 = 0;
       x1 = Math.round((rho - y1 * sin) / cos);
       y2 = height - 1;
       x2 = Math.round((rho - y2 * sin) / cos);
     } else {
-      // Linea mas horizontal
       x1 = 0;
       y1 = Math.round((rho - x1 * cos) / sin);
       x2 = width - 1;
       y2 = Math.round((rho - x2 * cos) / sin);
     }
     
-    // Recortar a bordes
     x1 = Math.max(0, Math.min(width - 1, x1));
     y1 = Math.max(0, Math.min(height - 1, y1));
     x2 = Math.max(0, Math.min(width - 1, x2));

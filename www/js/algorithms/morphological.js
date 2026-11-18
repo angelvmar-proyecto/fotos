@@ -5,131 +5,247 @@ class Morphological {
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Morphological Operations');
+    logger.info('Iniciando Morphological Operations (umbrales estrictos)');
     const start = Date.now();
     
-    const gray = ImageProcessor.toGrayscale(imageData);
-    const width = gray.width;
-    const height = gray.height;
-    const data = gray.data;
+    // 1. Preprocesamiento (Sauvola + deskew)
+    const preprocessed = preprocessor.process(imageData);
+    const preMetrics = preprocessor.getMetrics();
+    
+    const width = preprocessed.width;
+    const height = preprocessed.height;
+    const data = preprocessed.data;
     
     const lines = [];
     
-    // Crear imagen binaria
-    const binary = new Uint8Array(width * height);
-    for (let i = 0; i < data.length; i += 4) {
-      binary[i/4] = data[i] < 200 ? 1 : 0;
-    }
+    // 2. Erosion horizontal (kernel 1D de 40px)
+    const hKernelSize = 40;
+    const hEroded = this.erode1D(data, width, height, hKernelSize, 'horizontal');
+    const hDilated = this.dilate1D(hEroded, width, height, hKernelSize, 'horizontal');
     
-    // Kernel horizontal
-    const hKernelSize = 30;
-    const hEroded = this.erode(binary, width, height, hKernelSize, 1);
-    const hDilated = this.dilate(hEroded, width, height, hKernelSize, 1);
-    
-    // Detectar líneas horizontales
+    // 3. Proyeccion horizontal
     const hProjection = new Array(height).fill(0);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (hDilated[y * width + x]) hProjection[y]++;
+        if (hDilated[y * width + x] === 1) hProjection[y]++;
       }
     }
     
-    const hThreshold = width * 0.3;
+    // 4. Detectar bandas horizontales (umbral estricto 0.20)
+    const hThreshold = width * 0.20;
+    logger.info(`  Umbral horizontal: ${hThreshold.toFixed(0)} pixeles`);
+    let inLine = false;
+    let lineStart = 0;
+    
     for (let y = 0; y < height; y++) {
       if (hProjection[y] > hThreshold) {
-        lines.push({
-          x1: 0, y1: y,
-          x2: width - 1, y2: y,
-          angle: 0,
-          length: width
-        });
+        if (!inLine) {
+          lineStart = y;
+          inLine = true;
+        }
+      } else {
+        if (inLine) {
+          const lineY = Math.floor((lineStart + y) / 2);
+          lines.push({
+            x1: 0, y1: lineY,
+            x2: width - 1, y2: lineY,
+            angle: 0,
+            length: width
+          });
+          inLine = false;
+        }
       }
     }
     
-    // Kernel vertical
-    const vKernelSize = 30;
-    const vEroded = this.erode(binary, width, height, 1, vKernelSize);
-    const vDilated = this.dilate(vEroded, width, height, 1, vKernelSize);
+    const hLinesBeforeMerge = lines.length;
+    logger.info(`  Lineas horizontales antes de fusion: ${hLinesBeforeMerge}`);
     
-    // Detectar líneas verticales
+    // 5. Erosion vertical (kernel 1D de 40px)
+    const vKernelSize = 40;
+    const vEroded = this.erode1D(data, width, height, vKernelSize, 'vertical');
+    const vDilated = this.dilate1D(vEroded, width, height, vKernelSize, 'vertical');
+    
+    // 6. Proyeccion vertical
     const vProjection = new Array(width).fill(0);
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
-        if (vDilated[y * width + x]) vProjection[x]++;
+        if (vDilated[y * width + x] === 1) vProjection[x]++;
       }
     }
     
-    const vThreshold = height * 0.3;
+    // 7. Detectar bandas verticales (umbral estricto 0.20)
+    const vThreshold = height * 0.20;
+    logger.info(`  Umbral vertical: ${vThreshold.toFixed(0)} pixeles`);
+    inLine = false;
+    lineStart = 0;
+    
     for (let x = 0; x < width; x++) {
       if (vProjection[x] > vThreshold) {
-        lines.push({
-          x1: x, y1: 0,
-          x2: x, y2: height - 1,
-          angle: 90,
-          length: height
-        });
+        if (!inLine) {
+          lineStart = x;
+          inLine = true;
+        }
+      } else {
+        if (inLine) {
+          const lineX = Math.floor((lineStart + x) / 2);
+          lines.push({
+            x1: lineX, y1: 0,
+            x2: lineX, y2: height - 1,
+            angle: 90,
+            length: height
+          });
+          inLine = false;
+        }
       }
     }
     
+    const vLinesBeforeMerge = lines.length - hLinesBeforeMerge;
+    logger.info(`  Lineas verticales antes de fusion: ${vLinesBeforeMerge}`);
+    
+    // 8. Fusion de lineas cercanas (umbral estricto 15px)
+    const merged = this.mergeNearbyLines(lines, 15);
+    logger.info(`  Lineas tras fusion: ${merged.length}`);
+    
     const time = Date.now() - start;
-    logger.info(`Morphological completado en ${time}ms. Lineas: ${lines.length}`);
+    logger.info(`Morphological completado en ${time}ms. Lineas: ${merged.length}`);
     
     return { 
       algorithm: this.name, 
       color: this.color, 
-      lines, 
-      metrics: { totalLines: lines.length, executionTime: time } 
+      lines: merged, 
+      metrics: { 
+        totalLines: merged.length, 
+        executionTime: time,
+        preprocessingTime: preMetrics.preprocessingTime,
+        skewAngle: preMetrics.skewAngle,
+        linesBeforeMerge: lines.length,
+        linesAfterMerge: merged.length,
+        horizontalLines: merged.filter(l => l.angle === 0).length,
+        verticalLines: merged.filter(l => l.angle === 90).length
+      } 
     };
   }
   
-  erode(binary, width, height, kWidth, kHeight) {
+  erode1D(data, width, height, kernelSize, direction) {
     const result = new Uint8Array(width * height);
-    const halfW = Math.floor(kWidth / 2);
-    const halfH = Math.floor(kHeight / 2);
+    const half = Math.floor(kernelSize / 2);
     
-    for (let y = halfH; y < height - halfH; y++) {
-      for (let x = halfW; x < width - halfW; x++) {
-        let minVal = 1;
-        for (let ky = 0; ky < kHeight; ky++) {
-          for (let kx = 0; kx < kWidth; kx++) {
-            const px = x + kx - halfW;
-            const py = y + ky - halfH;
-            if (!binary[py * width + px]) {
+    if (direction === 'horizontal') {
+      for (let y = 0; y < height; y++) {
+        for (let x = half; x < width - half; x++) {
+          let minVal = 1;
+          for (let k = 0; k < kernelSize; k++) {
+            if (data[y * width + (x - half + k)] === 0) {
               minVal = 0;
               break;
             }
           }
-          if (!minVal) break;
+          result[y * width + x] = minVal;
         }
-        result[y * width + x] = minVal;
+      }
+    } else {
+      for (let x = 0; x < width; x++) {
+        for (let y = half; y < height - half; y++) {
+          let minVal = 1;
+          for (let k = 0; k < kernelSize; k++) {
+            if (data[(y - half + k) * width + x] === 0) {
+              minVal = 0;
+              break;
+            }
+          }
+          result[y * width + x] = minVal;
+        }
       }
     }
+    
     return result;
   }
   
-  dilate(binary, width, height, kWidth, kHeight) {
+  dilate1D(data, width, height, kernelSize, direction) {
     const result = new Uint8Array(width * height);
-    const halfW = Math.floor(kWidth / 2);
-    const halfH = Math.floor(kHeight / 2);
+    const half = Math.floor(kernelSize / 2);
     
-    for (let y = halfH; y < height - halfH; y++) {
-      for (let x = halfW; x < width - halfW; x++) {
-        let maxVal = 0;
-        for (let ky = 0; ky < kHeight; ky++) {
-          for (let kx = 0; kx < kWidth; kx++) {
-            const px = x + kx - halfW;
-            const py = y + ky - halfH;
-            if (binary[py * width + px]) {
+    if (direction === 'horizontal') {
+      for (let y = 0; y < height; y++) {
+        for (let x = half; x < width - half; x++) {
+          let maxVal = 0;
+          for (let k = 0; k < kernelSize; k++) {
+            if (data[y * width + (x - half + k)] === 1) {
               maxVal = 1;
               break;
             }
           }
-          if (maxVal) break;
+          result[y * width + x] = maxVal;
         }
-        result[y * width + x] = maxVal;
+      }
+    } else {
+      for (let x = 0; x < width; x++) {
+        for (let y = half; y < height - half; y++) {
+          let maxVal = 0;
+          for (let k = 0; k < kernelSize; k++) {
+            if (data[(y - half + k) * width + x] === 1) {
+              maxVal = 1;
+              break;
+            }
+          }
+          result[y * width + x] = maxVal;
+        }
       }
     }
+    
     return result;
+  }
+  
+  mergeNearbyLines(lines, threshold) {
+    const merged = [];
+    const used = new Set();
+    
+    const horizontal = lines.filter(l => l.angle === 0);
+    const vertical = lines.filter(l => l.angle === 90);
+    
+    // Fusionar horizontales cercanas
+    for (let i = 0; i < horizontal.length; i++) {
+      if (used.has(i)) continue;
+      let current = horizontal[i];
+      
+      for (let j = i + 1; j < horizontal.length; j++) {
+        if (used.has(j)) continue;
+        if (Math.abs(current.y1 - horizontal[j].y1) < threshold) {
+          current = {
+            ...current,
+            y1: Math.floor((current.y1 + horizontal[j].y1) / 2),
+            y2: Math.floor((current.y2 + horizontal[j].y2) / 2)
+          };
+          used.add(j);
+        }
+      }
+      
+      merged.push(current);
+      used.add(i);
+    }
+    
+    // Fusionar verticales cercanas
+    for (let i = 0; i < vertical.length; i++) {
+      if (used.has(i + horizontal.length)) continue;
+      let current = vertical[i];
+      
+      for (let j = i + 1; j < vertical.length; j++) {
+        if (used.has(j + horizontal.length)) continue;
+        if (Math.abs(current.x1 - vertical[j].x1) < threshold) {
+          current = {
+            ...current,
+            x1: Math.floor((current.x1 + vertical[j].x1) / 2),
+            x2: Math.floor((current.x2 + vertical[j].x2) / 2)
+          };
+          used.add(j + horizontal.length);
+        }
+      }
+      
+      merged.push(current);
+      used.add(i + horizontal.length);
+    }
+    
+    return merged;
   }
 }
 window.Morphological = Morphological;

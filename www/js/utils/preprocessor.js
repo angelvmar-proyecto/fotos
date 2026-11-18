@@ -4,27 +4,23 @@ class Preprocessor {
   }
 
   process(imageData) {
-    logger.info('Preprocesando imagen...');
+    logger.info('Preprocesando imagen (Sauvola + deskew)...');
     const start = Date.now();
     
     // 1. Escala de grises
     const gray = this.toGrayscale(imageData);
     logger.info('  Escala de grises OK');
     
-    // 2. Umbral de Otsu
-    const otsuThreshold = this.otsuThreshold(gray);
-    logger.info(`  Umbral Otsu: ${otsuThreshold}`);
+    // 2. Umbral adaptativo de Sauvola (mejor que Otsu para fotos)
+    const binary = this.sauvolaThreshold(gray, 15, 0.5);
+    logger.info('  Umbral Sauvola adaptativo OK');
     
-    // 3. Binarización
-    const binary = this.binarize(gray, otsuThreshold);
-    logger.info('  Binarizacion OK');
-    
-    // 4. Detectar inversion (fondo oscuro?)
+    // 3. Detectar inversion (fondo oscuro?)
     const inverted = this.needsInversion(binary);
     const finalBinary = inverted ? this.invert(binary) : binary;
     if (inverted) logger.info('  Imagen invertida (fondo oscuro detectado)');
     
-    // 5. Detectar y corregir skew
+    // 4. Detectar y corregir skew
     const skewAngle = this.detectSkew(finalBinary);
     logger.info(`  Angulo de inclinacion detectado: ${skewAngle.toFixed(2)} grados`);
     
@@ -36,7 +32,6 @@ class Preprocessor {
     
     const time = Date.now() - start;
     this.lastMetrics = {
-      otsuThreshold,
       skewAngle,
       inverted,
       preprocessingTime: time
@@ -59,49 +54,43 @@ class Preprocessor {
     return { data: gray, width, height };
   }
 
-  otsuThreshold(gray) {
-    const data = gray.data;
-    const hist = new Array(256).fill(0);
-    
-    for (let i = 0; i < data.length; i++) {
-      hist[data[i]]++;
-    }
-    
-    const total = data.length;
-    let sum = 0;
-    for (let i = 0; i < 256; i++) sum += i * hist[i];
-    
-    let sumB = 0, wB = 0, wF = 0;
-    let maxVariance = 0, threshold = 128;
-    
-    for (let t = 0; t < 256; t++) {
-      wB += hist[t];
-      if (wB === 0) continue;
-      wF = total - wB;
-      if (wF === 0) break;
-      
-      sumB += t * hist[t];
-      const mB = sumB / wB;
-      const mF = (sum - sumB) / wF;
-      const variance = wB * wF * (mB - mF) * (mB - mF);
-      
-      if (variance > maxVariance) {
-        maxVariance = variance;
-        threshold = t;
-      }
-    }
-    
-    return threshold;
-  }
-
-  binarize(gray, threshold) {
+  // Umbral adaptativo de Sauvola
+  sauvolaThreshold(gray, windowSize, k) {
     const data = gray.data;
     const width = gray.width;
     const height = gray.height;
     const binary = new Uint8Array(width * height);
+    const half = Math.floor(windowSize / 2);
+    const R = 128;
     
-    for (let i = 0; i < data.length; i++) {
-      binary[i] = data[i] < threshold ? 1 : 0;
+    // Para cada pixel, calcular media y desviacion estandar local
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0, sumSq = 0, count = 0;
+        
+        const yStart = Math.max(0, y - half);
+        const yEnd = Math.min(height - 1, y + half);
+        const xStart = Math.max(0, x - half);
+        const xEnd = Math.min(width - 1, x + half);
+        
+        for (let yy = yStart; yy <= yEnd; yy++) {
+          for (let xx = xStart; xx <= xEnd; xx++) {
+            const val = data[yy * width + xx];
+            sum += val;
+            sumSq += val * val;
+            count++;
+          }
+        }
+        
+        const mean = sum / count;
+        const variance = (sumSq / count) - (mean * mean);
+        const std = Math.sqrt(Math.max(0, variance));
+        
+        // Formula de Sauvola
+        const threshold = mean * (1 + k * (std / R - 1));
+        
+        binary[y * width + x] = data[y * width + x] < threshold ? 1 : 0;
+      }
     }
     
     return { data: binary, width, height };
@@ -134,24 +123,24 @@ class Preprocessor {
     const width = binary.width;
     const height = binary.height;
     
+    // Para velocidad, trabajar con version reducida
+    const step = 4;
     let bestAngle = 0;
     let bestScore = -Infinity;
     
-    // Probar angulos de -3 a +3 con paso de 0.5
     for (let angle = -3; angle <= 3; angle += 0.5) {
-      const score = this.evaluateAngle(binary, angle);
+      const score = this.evaluateAngleFast(binary, angle, step);
       if (score > bestScore) {
         bestScore = score;
         bestAngle = angle;
       }
     }
     
-    // Refinar con paso de 0.1 alrededor del mejor
     const refinedStart = Math.max(-3, bestAngle - 0.5);
     const refinedEnd = Math.min(3, bestAngle + 0.5);
     
     for (let angle = refinedStart; angle <= refinedEnd; angle += 0.1) {
-      const score = this.evaluateAngle(binary, angle);
+      const score = this.evaluateAngleFast(binary, angle, step);
       if (score > bestScore) {
         bestScore = score;
         bestAngle = angle;
@@ -161,36 +150,65 @@ class Preprocessor {
     return bestAngle;
   }
 
-  evaluateAngle(binary, angle) {
-    if (Math.abs(angle) < 0.01) {
-      // Sin rotacion: proyeccion directa
-      return this.horizontalProjectionScore(binary);
-    }
-    
-    // Rotar virtualmente y evaluar
-    const rotated = this.rotateBinary(binary, angle);
-    return this.horizontalProjectionScore(rotated);
-  }
-
-  horizontalProjectionScore(binary) {
+  evaluateAngleFast(binary, angle, step) {
     const data = binary.data;
     const width = binary.width;
     const height = binary.height;
-    const projection = new Array(height).fill(0);
     
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (data[y * width + x] === 1) projection[y]++;
+    if (Math.abs(angle) < 0.01) {
+      return this.horizontalProjectionScoreFast(data, width, height, step);
+    }
+    
+    const rad = angle * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const cx = width / 2;
+    const cy = height / 2;
+    
+    const projection = new Array(Math.ceil(height / step)).fill(0);
+    
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        if (data[y * width + x] === 1) {
+          const dx = x - cx;
+          const dy = y - cy;
+          const srcY = Math.round(-dx * sin + dy * cos + cy);
+          const projIdx = Math.floor(srcY / step);
+          if (projIdx >= 0 && projIdx < projection.length) {
+            projection[projIdx]++;
+          }
+        }
       }
     }
     
-    // Score = varianza de la proyeccion (picos altos = lineas claras)
-    const mean = projection.reduce((a, b) => a + b, 0) / height;
+    const mean = projection.reduce((a, b) => a + b, 0) / projection.length;
     let variance = 0;
-    for (let i = 0; i < height; i++) {
+    for (let i = 0; i < projection.length; i++) {
       variance += (projection[i] - mean) ** 2;
     }
-    return variance / height;
+    return variance / projection.length;
+  }
+
+  horizontalProjectionScoreFast(data, width, height, step) {
+    const projection = new Array(Math.ceil(height / step)).fill(0);
+    
+    for (let y = 0; y < height; y += step) {
+      for (let x = 0; x < width; x += step) {
+        if (data[y * width + x] === 1) projection[Math.floor(y/step)]++;
+      }
+    }
+    
+    const mean = projection.reduce((a, b) => a + b, 0) / projection.length;
+    let variance = 0;
+    for (let i = 0; i < projection.length; i++) {
+      variance += (projection[i] - mean) ** 2;
+    }
+    return variance / projection.length;
+  }
+
+  deskew(binary, angle) {
+    logger.info(`  Aplicando deskew de ${angle.toFixed(2)} grados...`);
+    return this.rotateBinary(binary, angle);
   }
 
   rotateBinary(binary, angleDeg) {
@@ -219,11 +237,6 @@ class Preprocessor {
     }
     
     return { data: rotated, width, height };
-  }
-
-  deskew(binary, angle) {
-    logger.info(`  Aplicando deskew de ${angle.toFixed(2)} grados...`);
-    return this.rotateBinary(binary, angle);
   }
 
   getMetrics() {
