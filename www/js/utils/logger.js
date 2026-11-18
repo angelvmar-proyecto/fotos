@@ -7,5 +7,8 @@ class Logger {
     console.log(`[${level}] ${message}`);
   }
   getLogs() { return this.logs; }
+  getLogsText() { 
+    return this.logs.map(l => `[${l.timestamp}ms] [${l.level}] ${l.message}`).join('\n'); 
+  }
 }
 const logger = new Logger();
