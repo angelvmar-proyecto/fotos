@@ -8,14 +8,16 @@
         body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; }
         .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
         button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; }
-        button:disabled { background: #555; }
+        button:disabled { background: #555; cursor: not-allowed; }
         .btn-secondary { background: #2196F3; }
+        .btn-danger { background: #f44336; }
         #canvasContainer { width: 100%; height: 400px; background: #000; border: 2px solid #444; margin-bottom: 15px; }
         #mainCanvas { width: 100%; height: 100%; }
         .log-container { max-height: 300px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; }
         .checkbox-item { margin: 10px 0; }
         .checkbox-item input { margin-right: 10px; }
         .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        #statusIndicator { display: none; padding: 10px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; }
     </style>
 </head>
 <body>
@@ -48,6 +50,8 @@
         <button onclick="deselectAll()">Deseleccionar Todos</button>
         <br><br>
         <button onclick="runAlgorithms()" id="runButton" disabled>Ejecutar</button>
+        <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">Cancelar</button>
+        <div id="statusIndicator"></div>
     </div>
 
     <div class="panel" id="vizPanel" style="display:none;">
@@ -63,6 +67,7 @@
 
     <script src="js/utils/logger.js"></script>
     <script src="js/utils/image-processor.js"></script>
+    <script src="js/utils/preprocessor.js"></script>
     <script src="js/visualization/canvas-manager.js"></script>
     <script src="js/algorithms/hough.js"></script>
     <script src="js/algorithms/profile-projection.js"></script>
@@ -72,6 +77,8 @@
     
     <script>
         let canvasManager, runner, selector, currentImageData = null;
+        let isRunning = false;
+        let cancelRequested = false;
 
         function initApp() {
             logger.info("Iniciando aplicacion...");
@@ -126,8 +133,7 @@
         }
 
         async function runAlgorithms() {
-            if (!currentImageData) return;
-            logger.info("Ejecutando algoritmos seleccionados...");
+            if (!currentImageData || isRunning) return;
             
             const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
             if (selected.length === 0) {
@@ -135,22 +141,71 @@
                 return;
             }
             
+            isRunning = true;
+            cancelRequested = false;
+            document.getElementById('runButton').disabled = true;
+            document.getElementById('cancelButton').style.display = 'inline-block';
+            
+            logger.info("Ejecutando algoritmos seleccionados...");
             logger.info("Algoritmos a ejecutar: " + selected.join(", "));
-            const results = await runner.runSelected(selected, currentImageData);
             
-            results.forEach(res => {
-                canvasManager.addLayer(res.algorithm, (ctx) => {
-                    ctx.strokeStyle = res.color;
-                    ctx.lineWidth = 3;
-                    res.lines.forEach(line => {
-                        ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
+            const results = [];
+            for (let i = 0; i < selected.length; i++) {
+                if (cancelRequested) {
+                    logger.info("Ejecucion cancelada por el usuario");
+                    break;
+                }
+                
+                const algoName = selected[i];
+                showStatus(`Procesando ${algoName}... (${i+1}/${selected.length})`);
+                
+                try {
+                    const result = await runner.runAlgorithm(algoName, currentImageData);
+                    results.push(result);
+                    
+                    canvasManager.addLayer(result.algorithm, (ctx) => {
+                        ctx.strokeStyle = result.color;
+                        ctx.lineWidth = 3;
+                        result.lines.forEach(line => {
+                            ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
+                        });
                     });
-                });
-                logger.info(`${res.algorithm}: ${res.metrics.totalLines} lineas en ${res.metrics.executionTime}ms`);
-            });
+                    
+                    logger.info(`${result.algorithm}: ${result.metrics.totalLines} lineas en ${result.metrics.executionTime}ms`);
+                } catch (e) {
+                    logger.error(`Error en ${algoName}: ${e.message}`);
+                }
+                
+                // Ceder control al navegador
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
             
-            const diagnosis = selector.analyze(results);
-            logger.info("Mejor algoritmo: " + diagnosis.best);
+            hideStatus();
+            
+            if (results.length > 0 && !cancelRequested) {
+                const diagnosis = selector.analyze(results);
+                logger.info("Mejor algoritmo: " + diagnosis.best);
+                logger.info("Razones: " + diagnosis.reasons.join(" | "));
+            }
+            
+            isRunning = false;
+            document.getElementById('runButton').disabled = false;
+            document.getElementById('cancelButton').style.display = 'none';
+        }
+
+        function cancelExecution() {
+            cancelRequested = true;
+            logger.info("Cancelacion solicitada...");
+        }
+
+        function showStatus(text) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.textContent = text;
+            indicator.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('statusIndicator').style.display = 'none';
         }
 
         function copyLog() {
