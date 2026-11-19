@@ -1,361 +1,536 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Detectores de Tablas</title>
-<style>
-body{font-family:sans-serif;background:#1a1a1a;color:#e0e0e0;padding:12px;margin:0}
-.panel{background:#2a2a2a;border-radius:8px;padding:14px;margin-bottom:14px}
-h2{text-align:center;color:#4CAF50}h3{color:#4CAF50;margin-top:0}
-button{background:#4CAF50;color:#fff;border:none;padding:10px 16px;border-radius:6px;margin:4px;cursor:pointer}
-button:disabled{background:#555}
-.btn-secondary{background:#2196F3}.btn-danger{background:#f44336}
-.btn-opt{background:#FF9800;padding:6px 10px;font-size:12px}
-#canvasContainer{position:relative;width:100%;height:420px;background:#000;border:2px solid #444;overflow:hidden}
-#mainCanvas{display:block;touch-action:none}
-.canvas-controls{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:10}
-.canvas-controls button{padding:8px 12px;margin:0;background:rgba(76,175,80,.9)}
-.algo-row{display:flex;align-items:center;justify-content:space-between;background:#333;border-radius:4px;padding:8px;margin:6px 0}
-.algo-row label{display:flex;align-items:center;cursor:pointer;flex:1}
-.algo-row input{width:18px;height:18px;margin-right:8px}
-.dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px}
-.layer-toggle{display:inline-block;padding:8px 10px;margin:4px;background:#333;border-radius:4px;cursor:pointer}
-.layer-toggle.inactive{opacity:.35}
-#statusIndicator{display:none;padding:10px;background:#333;border-radius:6px;text-align:center;color:#4CAF50;font-weight:bold}
-#diagnosisBox{display:none;background:#333;border-left:4px solid #FFD700;padding:12px;border-radius:4px;font-size:14px;line-height:1.6}
-.log-container{max-height:300px;overflow-y:auto;background:#111;padding:10px;font-family:monospace;font-size:12px;border-radius:4px}
-.opt{background:#333;padding:8px;border-radius:4px;margin:6px 0}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detectores de Tablas</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; margin: 0; }
+        .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; cursor: pointer; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .btn-secondary { background: #2196F3; }
+        .btn-danger { background: #f44336; }
+        .btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
+        #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
+        #mainCanvas { display: block; touch-action: none; }
+        .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
+        .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
+        .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
+        .checkbox-item { margin: 8px 0; padding: 8px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
+        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
+        .checkbox-item label { cursor: pointer; flex: 1; }
+        .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+        #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
+        .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
+        .layer-toggle.inactive { opacity: 0.35; }
+        #diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; }
+        #analysisBox { background: #1e3a5f; border-left: 4px solid #2196F3; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
+        h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
+        h3 { color: #4CAF50; margin-top: 0; }
+    </style>
 </head>
 <body>
-<h2>🔍 Detectores de Tablas</h2>
+    <h2>🔍 Detectores de Tablas</h2>
 
-<div class="panel">
-<button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
-<input type="file" id="imageInput" accept="image/*" style="display:none">
-<span id="imgInfo" style="color:#999;margin-left:8px"></span>
-</div>
+    <div class="panel">
+        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
+        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+        <span id="imgInfo" style="margin-left:10px; color:#999;"></span>
+    </div>
 
-<div class="panel">
-<h3>🎨 Visualización</h3>
-<div id="canvasContainer">
-<canvas id="mainCanvas"></canvas>
-<div class="canvas-controls">
-<button onclick="canvasManager.zoomIn()">➕</button>
-<button onclick="canvasManager.zoomOut()">➖</button>
-<button onclick="canvasManager.reset()">🔄</button>
-</div>
-</div>
-<div id="layerControls"></div>
-</div>
+    <div class="panel" id="vizPanel">
+        <h3>🎨 Visualización (pellizca para zoom)</h3>
+        <div id="canvasContainer">
+            <canvas id="mainCanvas"></canvas>
+            <div class="canvas-controls">
+                <button onclick="canvasManager.zoomIn()">➕</button>
+                <button onclick="canvasManager.zoomOut()">➖</button>
+                <button onclick="canvasManager.reset()">🔄</button>
+            </div>
+        </div>
+        <div id="layerControls"></div>
+    </div>
 
-<div class="panel">
-<h3>⚙️ Algoritmos</h3>
-<div class="opt">
-<label><input type="checkbox" id="chkEvidence" checked> Validar evidencia anti-texto (descarta líneas sin soporte real)</label>
-</div>
-<div id="algoList"></div>
-<button onclick="selectAll(true)">✅ Todos</button>
-<button onclick="selectAll(false)">❌ Ninguno</button>
-<button class="btn-opt" onclick="optimizeSelected()">🔧 Optimizar seleccionados</button>
-<br><br>
-<button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
-<button onclick="cancelRequested=true" id="cancelButton" class="btn-danger" style="display:none">⏹️ Cancelar</button>
-<div id="statusIndicator"></div>
-<div id="diagnosisBox"></div>
-</div>
+    <div class="panel">
+        <h3>⚙️ Algoritmos (11 disponibles)</h3>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_hough" value="Hough Transform">
+                <span class="color-dot" style="background:#FF0000;"></span>
+                <label for="algo_hough">Hough Transform</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('hough')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
+                <span class="color-dot" style="background:#FFFF00;"></span>
+                <label for="algo_profile">Profile Projection</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('profile')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_morph" value="Morphological" checked>
+                <span class="color-dot" style="background:#808080;"></span>
+                <label for="algo_morph">Morphological</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('morph')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
+                <span class="color-dot" style="background:#800080;"></span>
+                <label for="algo_radar">Radar Matcher</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('radar')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_echo" value="Echo Radar" checked>
+                <span class="color-dot" style="background:#00BFFF;"></span>
+                <label for="algo_echo">Echo Radar</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('echo')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_lsd" value="LSD">
+                <span class="color-dot" style="background:#00FF00;"></span>
+                <label for="algo_lsd">LSD</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('lsd')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_gabor" value="Gabor Filters">
+                <span class="color-dot" style="background:#FF00FF;"></span>
+                <label for="algo_gabor">Gabor Filters</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('gabor')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_frangi" value="Frangi Filter" checked>
+                <span class="color-dot" style="background:#00FFFF;"></span>
+                <label for="algo_frangi">Frangi Filter</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('frangi')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked>
+                <span class="color-dot" style="background:#FFA500;"></span>
+                <label for="algo_fourier">Fourier Analysis</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_fourier_adv" value="Fourier Avanzado" checked>
+                <span class="color-dot" style="background:#FF6600;"></span>
+                <label for="algo_fourier_adv">Fourier Avanzado (Pasa-Bajas + Valle)</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('fourier_adv')">🔧 Optimizar</button>
+        </div>
+        <div class="checkbox-item">
+            <div>
+                <input type="checkbox" id="algo_cfar" value="CFAR Detector">
+                <span class="color-dot" style="background:#FFC0CB;"></span>
+                <label for="algo_cfar">CFAR Detector</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('cfar')">🔧 Optimizar</button>
+        </div>
+        <br>
+        <button onclick="selectAll()">✅ Todos</button>
+        <button onclick="deselectAll()">❌ Ninguno</button>
+        <button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
+        <br><br>
+        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+        <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
+        <div id="statusIndicator"></div>
+        <div id="analysisBox" style="display:none;"></div>
+        <div id="diagnosisBox" style="display:none;"></div>
+    </div>
 
-<div class="panel">
-<h3>📝 Log</h3>
-<button class="btn-secondary" onclick="copyLog()">📋 Copiar</button>
-<button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar</button>
-<div class="log-container" id="logContainer"></div>
-</div>
+    <div class="panel">
+        <h3>📝 Log</h3>
+        <button class="btn-secondary" onclick="copyLog()">📋 Copiar Log</button>
+        <button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar Log</button>
+        <div class="log-container" id="logContainer"></div>
+    </div>
 
-<script src="js/utils/logger.js"></script>
-<script src="js/utils/image-processor.js"></script>
-<script src="js/utils/preprocessor.js"></script>
-<script src="js/utils/line-validator.js"></script>
-<script src="js/utils/text-remover.js"></script>
-<script src="js/visualization/canvas-manager.js"></script>
-<script src="js/algorithms/hough.js"></script>
-<script src="js/algorithms/profile-projection.js"></script>
-<script src="js/algorithms/morphological.js"></script>
-<script src="js/algorithms/radar-matcher.js"></script>
-<script src="js/algorithms/echo-radar.js"></script>
-<script src="js/algorithms/lsd.js"></script>
-<script src="js/algorithms/gabor.js"></script>
-<script src="js/algorithms/frangi.js"></script>
-<script src="js/algorithms/fourier.js"></script>
-<script src="js/algorithms/fourier-avanzado.js"></script>
-<script src="js/algorithms/cfar.js"></script>
-<script src="js/runner.js"></script>
-<script src="js/diagnosis/adaptive-diagnosis.js"></script>
+    <script src="js/utils/logger.js"></script>
+    <script src="js/utils/image-processor.js"></script>
+    <script src="js/utils/preprocessor.js"></script>
+    <script src="js/utils/line-validator.js"></script>
+    <script src="js/utils/text-remover.js"></script>
+    <script src="js/visualization/canvas-manager.js"></script>
+    <script src="js/algorithms/hough.js"></script>
+    <script src="js/algorithms/profile-projection.js"></script>
+    <script src="js/algorithms/morphological.js"></script>
+    <script src="js/algorithms/radar-matcher.js"></script>
+    <script src="js/algorithms/echo-radar.js"></script>
+    <script src="js/algorithms/lsd.js"></script>
+    <script src="js/algorithms/gabor.js"></script>
+    <script src="js/algorithms/frangi.js"></script>
+    <script src="js/algorithms/fourier.js"></script>
+    <script src="js/algorithms/fourier-avanzado.js"></script>
+    <script src="js/algorithms/cfar.js"></script>
+    <script src="js/runner.js"></script>
+    <script src="js/diagnosis/adaptive-diagnosis.js"></script>
+    <script src="js/diagnosis/smart-analyzer.js"></script>
 
-<script>
-let canvasManager, runner, selector, currentImageData = null;
-let isRunning = false, cancelRequested = false;
-let algorithmResults = [], algos = [];
+    <script>
+        let canvasManager, runner, selector, smartAnalyzer, currentImageData = null;
+        let isRunning = false;
+        let cancelRequested = false;
+        let algorithmResults = [];
+        let algorithmInstances = {};
+        let currentImageProfile = null;
 
-const DEFAULT_ON = ['Profile Projection','Morphological','Echo Radar','Fourier Analysis','Fourier Avanzado','Frangi Filter'];
+        function initApp() {
+            logger.info("Iniciando aplicacion...");
+            try {
+                canvasManager = new CanvasManager('mainCanvas');
+                runner = new AlgorithmRunner();
+                selector = new AdaptiveDiagnosis();
+                smartAnalyzer = new SmartAnalyzer();
 
-function initApp(){
-  logger.info("Iniciando aplicacion...");
-  try{
-    canvasManager = new CanvasManager('mainCanvas');
-    runner = new AlgorithmRunner();
-    selector = new AdaptiveDiagnosis();
+                algorithmInstances = {
+                    hough: new HoughTransform(),
+                    profile: new ProfileProjection(),
+                    morph: new Morphological(),
+                    radar: new RadarMatcher(),
+                    echo: new EchoRadar(),
+                    lsd: new LSD(),
+                    gabor: new GaborFilters(),
+                    frangi: new FrangiFilter(),
+                    fourier: new FourierAnalysis(),
+                    fourier_adv: new FourierAvanzado(),
+                    cfar: new CFARDetector()
+                };
 
-    algos = [
-      new HoughTransform(), new ProfileProjection(), new Morphological(),
-      new RadarMatcher(), new EchoRadar(), new LSD(), new GaborFilters(),
-      new FrangiFilter(), new FourierAnalysis(), new FourierAvanzado(), new CFARDetector()
-    ];
-    algos.forEach(a => runner.registerAlgorithm(a));
-    buildAlgoList();
-    document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-    logger.info("Aplicacion lista. " + algos.length + " algoritmos registrados.");
-  }catch(e){ alert("ERROR: "+e.message); logger.error(e.message); }
-}
+                Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
 
-function buildAlgoList(){
-  const c = document.getElementById('algoList');
-  c.innerHTML = '';
-  algos.forEach((a,i) => {
-    const row = document.createElement('div');
-    row.className = 'algo-row';
-    const lab = document.createElement('label');
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.value = a.name; cb.id = 'algo_'+i;
-    cb.checked = DEFAULT_ON.indexOf(a.name) !== -1;
-    const dot = document.createElement('span');
-    dot.className = 'dot'; dot.style.background = a.color;
-    lab.appendChild(cb); lab.appendChild(dot);
-    lab.appendChild(document.createTextNode(a.name));
-    const btn = document.createElement('button');
-    btn.className = 'btn-opt'; btn.textContent = '🔧';
-    btn.onclick = () => optimizeOne(a);
-    row.appendChild(lab); row.appendChild(btn);
-    c.appendChild(row);
-  });
-}
+                document.getElementById('imageInput').addEventListener('change', handleImageLoad);
+                logger.info("Aplicacion lista. 11 algoritmos registrados.");
+            } catch (e) {
+                alert("ERROR: " + e.message);
+                logger.error(e.message);
+            }
+        }
 
-function selectAll(v){
-  document.querySelectorAll('#algoList input').forEach(cb => cb.checked = v);
-  logger.info(v ? "Todos los algoritmos seleccionados" : "Todos los algoritmos deseleccionados");
-}
+        function applySmartSelection() {
+            if (!currentImageData) {
+                alert("Primero carga una imagen");
+                return;
+            }
 
-function handleImageLoad(ev){
-  const f = ev.target.files[0]; if(!f) return;
-  logger.info("Cargando: " + f.name);
-  const r = new FileReader();
-  r.onload = e => {
-    const img = new Image();
-    img.onload = () => {
-      const cv = document.createElement('canvas');
-      cv.width = img.width; cv.height = img.height;
-      const cx = cv.getContext('2d'); cx.drawImage(img,0,0);
-      currentImageData = cx.getImageData(0,0,cv.width,cv.height);
-      lineValidator.invalidate();
-      if (typeof preprocessor !== 'undefined' && preprocessor.clearCache) preprocessor.clearCache();
-      selector.history = []; algorithmResults = [];
-      canvasManager.clearLayers();
-      document.getElementById('layerControls').innerHTML = '';
-      document.getElementById('diagnosisBox').style.display = 'none';
-      canvasManager.loadImage(currentImageData);
-      document.getElementById('runButton').disabled = false;
-      document.getElementById('imgInfo').textContent = img.width+'x'+img.height;
-      logger.info("Imagen cargada: " + img.width + "x" + img.height);
-    };
-    img.src = e.target.result;
-  };
-  r.readAsDataURL(f);
-}
+            logger.info('=== ANÁLISIS INTELIGENTE DE IMAGEN ===');
+            currentImageProfile = smartAnalyzer.analyzeImage(currentImageData);
+            const suggestions = smartAnalyzer.getRecommendation();
 
-function drawResult(res){
-  canvasManager.addLayer(res.algorithm, ctx => {
-    ctx.strokeStyle = res.color; ctx.lineWidth = 2;
-    res.lines.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1,l.y1); ctx.lineTo(l.x2,l.y2); ctx.stroke(); });
-  });
-}
+            // Deseleccionar todos
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
 
-async function runAlgorithms(){
-  if(!currentImageData || isRunning) return;
-  const sel = Array.from(document.querySelectorAll('#algoList input:checked')).map(cb => cb.value);
-  if(sel.length === 0){ logger.error("No hay algoritmos seleccionados"); return; }
+            // Seleccionar algoritmos recomendados
+            const allAlgos = Object.values(algorithmInstances);
+            suggestions.primary.forEach(name => {
+                const algo = allAlgos.find(a => a.name === name);
+                if (algo) {
+                    const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
+                    if (key) {
+                        document.getElementById('algo_' + key).checked = true;
+                    }
+                }
+            });
 
-  isRunning = true; cancelRequested = false; algorithmResults = [];
-  canvasManager.clearLayers();
-  document.getElementById('layerControls').innerHTML = '';
-  document.getElementById('diagnosisBox').style.display = 'none';
-  document.getElementById('runButton').disabled = true;
-  document.getElementById('cancelButton').style.display = 'inline-block';
+            suggestions.secondary.forEach(name => {
+                const algo = allAlgos.find(a => a.name === name);
+                if (algo) {
+                    const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
+                    if (key) {
+                        document.getElementById('algo_' + key).checked = true;
+                    }
+                }
+            });
 
-  const useEvidence = document.getElementById('chkEvidence').checked;
-  logger.info("Algoritmos a ejecutar: " + sel.join(", "));
-  logger.info("Validacion de evidencia: " + (useEvidence ? "ACTIVA" : "inactiva"));
-  if(useEvidence) lineValidator.prepare(currentImageData);
+            // Aplicar parámetros sugeridos
+            Object.entries(suggestions.params).forEach(([algoName, params]) => {
+                if (algoName === 'deskew') return;
+                const algo = allAlgos.find(a => a.name === algoName);
+                if (algo) {
+                    Object.entries(params).forEach(([param, value]) => {
+                        if (algo[param] !== undefined) {
+                            algo[param] = value;
+                            logger.info('  ' + algoName + '.' + param + ' = ' + value);
+                        }
+                    });
+                }
+            });
 
-  for(let i=0;i<sel.length;i++){
-    if(cancelRequested){ logger.info("Ejecucion cancelada"); break; }
-    const name = sel[i];
-    showStatus(name + " (" + (i+1) + "/" + sel.length + ")");
-    await new Promise(r => setTimeout(r,30));
-    try{
-      let res = await runner.runAlgorithm(name, currentImageData);
-      if(useEvidence && !res.metrics.validated){
-        logger.info("  Validando " + name + "...");
-        res = lineValidator.filterResult(res);
-        canvasManager.removeLayer(name);
-      }
-      algorithmResults.push(res);
-      drawResult(res);
-      logger.info(name + ": " + res.metrics.totalLines + " lineas en " + res.metrics.executionTime + "ms");
-    }catch(e){ logger.error("Error en " + name + ": " + e.message); }
-    await new Promise(r => setTimeout(r,0));
-  }
+            // Mostrar análisis en UI
+            showAnalysis(currentImageProfile, suggestions);
 
-  hideStatus();
-  if(algorithmResults.length && !cancelRequested){
-    try{ showDiagnosis(selector.analyze(algorithmResults, currentImageData)); }
-    catch(e){ logger.error("Error en diagnostico: " + e.message); }
-    updateLayerControls();
-  }
-  isRunning = false;
-  document.getElementById('runButton').disabled = false;
-  document.getElementById('cancelButton').style.display = 'none';
-}
+            logger.info('Selección inteligente aplicada');
+        }
 
-function paramsOf(a){
-  const r = algorithmResults.find(x => x.algorithm === a.name);
-  return r ? r : null;
-}
+        function showAnalysis(profile, suggestions) {
+            const box = document.getElementById('analysisBox');
+            let html = '<strong style="color:#2196F3;">🧠 ANÁLISIS DE IMAGEN</strong><br>';
+            html += '<strong>Tipo:</strong> ' + profile.imageType + '<br>';
+            html += '<strong>Brillo:</strong> ' + profile.meanGray + (profile.isDark ? ' (oscura)' : ' (clara)') + '<br>';
+            html += '<strong>Densidad bordes:</strong> ' + profile.edgeDensity + '%<br>';
+            html += '<strong>Líneas detectadas:</strong> ' + profile.hPeaks + 'H / ' + profile.vPeaks + 'V<br>';
+            html += '<strong>Grosor promedio:</strong> ' + profile.avgLineThickness + 'px<br>';
+            
+            if (suggestions.primary.length > 0) {
+                html += '<br><strong>🎯 Algoritmos recomendados:</strong><br>';
+                html += suggestions.primary.map(a => '• ' + a).join('<br>');
+            }
 
-function optimizeOne(a){
-  const r = paramsOf(a);
-  if(!r){ alert("Ejecuta primero " + a.name); return; }
-  const n = r.metrics.totalLines;
-  const cov = r.metrics.avgCoverage, run = r.metrics.avgRunRatio;
-  let msg = [];
+            box.innerHTML = html;
+            box.style.display = 'block';
+        }
 
-  if(a.name === 'Echo Radar' || a.name === 'Fourier Avanzado'){
-    if(n < 15){
-      lineValidator.minCoverage = Math.max(0.25, lineValidator.minCoverage - 0.10);
-      lineValidator.minRunRatio = Math.max(0.25, lineValidator.minRunRatio - 0.10);
-      lineValidator.minSegRatio = Math.max(0.30, lineValidator.minSegRatio - 0.10);
-      lineValidator.gapTolerance = Math.min(14, lineValidator.gapTolerance + 3);
-      msg.push('pocas lineas -> evidencia relajada');
-    } else if(n > 200){
-      lineValidator.minCoverage = Math.min(0.80, lineValidator.minCoverage + 0.08);
-      lineValidator.minRunRatio = Math.min(0.85, lineValidator.minRunRatio + 0.08);
-      lineValidator.gapTolerance = Math.max(2, lineValidator.gapTolerance - 1);
-      msg.push('muchas lineas -> evidencia exigida');
-    }
-    if(a.name === 'Fourier Avanzado'){
-      if(n > 200){ a.minValleyWidth++; msg.push('anchoValle=' + a.minValleyWidth); }
-      else if(n < 15){ a.minValleyWidth = Math.max(2, a.minValleyWidth-1); a.thresholdPct = Math.min(0.6, a.thresholdPct+0.08);
-        msg.push('anchoValle=' + a.minValleyWidth + ' umbral=' + a.thresholdPct.toFixed(2)); }
-    }
-  } else if(a.name === 'Fourier Analysis'){
-    if(n > 150 && a.setMinDistance) a.setMinDistance((a.minDistance||15)+5);
-    else if(n < 30 && a.setMinDistance) a.setMinDistance(Math.max(6,(a.minDistance||15)-4));
-    msg.push('minDistance=' + a.minDistance);
-  } else if(a.name === 'CFAR Detector'){
-    if(n < 10){ a.thresholdFactor = Math.max(1.05,(a.thresholdFactor||1.6)-0.2); msg.push('factor=' + a.thresholdFactor.toFixed(2)); }
-    else if(n > 150){ a.thresholdFactor = (a.thresholdFactor||1.6)+0.2; msg.push('factor=' + a.thresholdFactor.toFixed(2)); }
-  } else if(a.name === 'Morphological'){
-    if(n < 15){ a.kernelSize = Math.max(5,(a.kernelSize||15)-4); msg.push('kernel=' + a.kernelSize); }
-    else if(n > 200){ a.kernelSize = (a.kernelSize||15)+4; msg.push('kernel=' + a.kernelSize); }
-  }
+        function optimizeAlgorithm(algoKey) {
+            if (algorithmResults.length === 0) {
+                alert("Primero ejecuta los algoritmos para tener datos de optimización");
+                return;
+            }
 
-  if(cov !== undefined) msg.push('cobertura=' + cov.toFixed(2) + ' run=' + run.toFixed(2));
-  if(msg.length === 0) msg.push('sin cambio (resultado en rango)');
-  logger.info('Optimizar ' + a.name + ': ' + msg.join(' | '));
-  alert(a.name + '\n' + msg.join('\n') + '\n\nEjecuta de nuevo.');
-}
+            const result = algorithmResults.find(r => r.algorithm === algorithmInstances[algoKey].name);
+            if (!result) {
+                alert(`No hay resultados de ${algorithmInstances[algoKey].name}`);
+                return;
+            }
 
-function optimizeSelected(){
-  const sel = Array.from(document.querySelectorAll('#algoList input:checked')).map(cb => cb.value);
-  let n = 0;
-  algos.forEach(a => { if(sel.indexOf(a.name) !== -1 && paramsOf(a)){ optimizeOneSilent(a); n++; } });
-  logger.info('Optimizacion multiple: ' + n + ' algoritmos ajustados');
-  alert(n + ' algoritmos ajustados. Ejecuta de nuevo.');
-}
+            logger.info(`Optimizando ${algorithmInstances[algoKey].name}...`);
+            
+            const lines = result.metrics.totalLines;
+            const executionTime = result.metrics.executionTime;
+            
+            if (algoKey === 'fourier') {
+                if (lines > 150) {
+                    algorithmInstances[algoKey].setMinDistance(20);
+                    logger.info(`Fourier: demasiadas líneas (${lines}), aumentando minDistance a 20`);
+                } else if (lines < 50) {
+                    algorithmInstances[algoKey].setMinDistance(10);
+                    logger.info(`Fourier: pocas líneas (${lines}), reduciendo minDistance a 10`);
+                }
+            } else if (algoKey === 'radar') {
+                if (lines === 0) {
+                    logger.info(`Radar: 0 líneas detectadas, sugiere usar otro algoritmo`);
+                }
+            } else if (algoKey === 'cfar') {
+                if (lines < 10) {
+                    logger.info(`CFAR: muy pocas líneas (${lines}), umbral muy alto`);
+                }
+            }
 
-function optimizeOneSilent(a){
-  const r = paramsOf(a); const n = r.metrics.totalLines;
-  if(a.name === 'Echo Radar' || a.name === 'Fourier Avanzado'){
-    if(n < 15){
-      lineValidator.minCoverage = Math.max(0.25, lineValidator.minCoverage-0.10);
-      lineValidator.minRunRatio = Math.max(0.25, lineValidator.minRunRatio-0.10);
-      lineValidator.gapTolerance = Math.min(14, lineValidator.gapTolerance+3);
-    } else if(n > 200){
-      lineValidator.minCoverage = Math.min(0.80, lineValidator.minCoverage+0.08);
-      lineValidator.minRunRatio = Math.min(0.85, lineValidator.minRunRatio+0.08);
-      lineValidator.gapTolerance = Math.max(2, lineValidator.gapTolerance-1);
-    }
-  }
-  if(a.name === 'Fourier Avanzado'){
-    if(n > 200) a.minValleyWidth++;
-    else if(n < 15){ a.minValleyWidth = Math.max(2,a.minValleyWidth-1); a.thresholdPct = Math.min(0.6,a.thresholdPct+0.08); }
-  }
-  if(a.name === 'Fourier Analysis' && a.setMinDistance){
-    if(n > 150) a.setMinDistance((a.minDistance||15)+5);
-    else if(n < 30) a.setMinDistance(Math.max(6,(a.minDistance||15)-4));
-  }
-  if(a.name === 'CFAR Detector'){
-    if(n < 10) a.thresholdFactor = Math.max(1.05,(a.thresholdFactor||1.6)-0.2);
-    else if(n > 150) a.thresholdFactor = (a.thresholdFactor||1.6)+0.2;
-  }
-  if(a.name === 'Morphological'){
-    if(n < 15) a.kernelSize = Math.max(5,(a.kernelSize||15)-4);
-    else if(n > 200) a.kernelSize = (a.kernelSize||15)+4;
-  }
-  logger.info('  ' + a.name + ' ajustado (' + n + ' lineas)');
-}
+            alert(`Parámetros de ${algorithmInstances[algoKey].name} ajustados. Ejecuta de nuevo para ver resultados.`);
+        }
 
-function showDiagnosis(d){
-  const b = document.getElementById('diagnosisBox');
-  let h = '<strong style="color:#FFD700">🏆 ' + d.best + '</strong><br>';
-  h += d.reasons.map(r => '• ' + r).join('<br>');
-  if(d.ranking && d.ranking.length > 1){
-    h += '<br><br><strong>Ranking:</strong><br>' + d.ranking.map((r,i) =>
-      (i+1)+'. '+r.algorithm+' — '+r.score.toFixed(3)+' ('+r.metrics.totalLines+' lineas)').join('<br>');
-  }
-  b.innerHTML = h; b.style.display = 'block';
-  logger.info("Mejor algoritmo: " + d.best);
-  d.reasons.forEach(r => logger.info("  " + r));
-}
+        function selectAll() {
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true);
+            logger.info("Todos los algoritmos seleccionados");
+        }
 
-function updateLayerControls(){
-  const c = document.getElementById('layerControls');
-  c.innerHTML = '<strong>Capas (toca = ocultar/mostrar, 💾 = exportar PNG):</strong><br>';
-  algorithmResults.forEach(res => {
-    const t = document.createElement('div');
-    t.className = 'layer-toggle';
-    t.innerHTML = '<span class="dot" style="background:'+res.color+'"></span>'+res.algorithm+': '+res.metrics.totalLines;
-    const ex = document.createElement('button');
-    ex.textContent = '💾';
-    ex.style.cssText = 'margin-left:8px;padding:4px 8px;font-size:12px;background:#2196F3';
-    ex.onclick = e => { e.stopPropagation(); canvasManager.exportLayer(res.algorithm); };
-    t.appendChild(ex);
-    t.onclick = () => { canvasManager.toggleLayer(res.algorithm); t.classList.toggle('inactive'); };
-    c.appendChild(t);
-  });
-}
+        function deselectAll() {
+            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+            logger.info("Todos los algoritmos deseleccionados");
+        }
 
-function showStatus(t){ const e=document.getElementById('statusIndicator'); e.textContent=t; e.style.display='block'; }
-function hideStatus(){ document.getElementById('statusIndicator').style.display='none'; }
-function copyLog(){ navigator.clipboard.writeText(logger.getLogsText()).then(()=>alert("Log copiado")).catch(e=>logger.error("Error al copiar: "+e)); }
-function clearLog(){ logger.logs=[]; logger.startTime=Date.now(); updateLog(); }
-function updateLog(){
-  const c=document.getElementById('logContainer');
-  c.innerHTML = logger.getLogs().map(l => '['+l.timestamp+'ms] ['+l.level+'] '+l.message).join('<br>');
-  c.scrollTop = c.scrollHeight;
-}
-setInterval(updateLog, 500);
-window.addEventListener("load", initApp);
-</script>
+        function handleImageLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            logger.info("Cargando: " + file.name);
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                    lineValidator.invalidate();
+                    if (typeof preprocessor !== 'undefined' && preprocessor.clearCache) preprocessor.clearCache();
+                    selector.history = [];
+                    algorithmResults = [];
+                    currentImageProfile = null;
+                    canvasManager.clearLayers();
+                    document.getElementById('layerControls').innerHTML = '';
+                    document.getElementById('diagnosisBox').style.display = 'none';
+                    document.getElementById('analysisBox').style.display = 'none';
+
+                    setTimeout(() => {
+                        canvasManager.loadImage(currentImageData);
+                        document.getElementById('runButton').disabled = false;
+                        document.getElementById('imgInfo').textContent = img.width + 'x' + img.height;
+                        logger.info("Imagen cargada: " + img.width + "x" + img.height);
+                    }, 100);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function runAlgorithms() {
+            if (!currentImageData || isRunning) return;
+
+            const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                logger.error("No hay algoritmos seleccionados");
+                return;
+            }
+
+            isRunning = true;
+            cancelRequested = false;
+            algorithmResults = [];
+            canvasManager.clearLayers();
+            document.getElementById('layerControls').innerHTML = '';
+            document.getElementById('diagnosisBox').style.display = 'none';
+            document.getElementById('runButton').disabled = true;
+            document.getElementById('cancelButton').style.display = 'inline-block';
+
+            logger.info("Algoritmos a ejecutar: " + selected.join(", "));
+
+            for (let i = 0; i < selected.length; i++) {
+                if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
+
+                const algoName = selected[i];
+                showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
+                await new Promise(r => setTimeout(r, 30));
+
+                try {
+                    const result = await runner.runAlgorithm(algoName, currentImageData);
+                    algorithmResults.push(result);
+
+                    canvasManager.addLayer(result.algorithm, (ctx) => {
+                        ctx.strokeStyle = result.color;
+                        ctx.lineWidth = 2;
+                        result.lines.forEach(line => {
+                            ctx.beginPath();
+                            ctx.moveTo(line.x1, line.y1);
+                            ctx.lineTo(line.x2, line.y2);
+                            ctx.stroke();
+                        });
+                    });
+
+                    logger.info(result.algorithm + ": " + result.metrics.totalLines + " lineas en " + result.metrics.executionTime + "ms");
+                } catch (e) {
+                    logger.error("Error en " + algoName + ": " + e.message);
+                }
+
+                await new Promise(r => setTimeout(r, 0));
+            }
+
+            hideStatus();
+
+            if (algorithmResults.length > 0 && !cancelRequested) {
+                try {
+                    const diagnosis = selector.analyze(algorithmResults, currentImageData);
+                    showDiagnosis(diagnosis);
+                    updateLayerControls();
+                } catch (e) {
+                    logger.error("Error en diagnostico: " + e.message);
+                }
+            }
+
+            isRunning = false;
+            document.getElementById('runButton').disabled = false;
+            document.getElementById('cancelButton').style.display = 'none';
+        }
+
+        function showDiagnosis(diagnosis) {
+            const box = document.getElementById('diagnosisBox');
+            let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
+            html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
+
+            if (diagnosis.ranking && diagnosis.ranking.length > 1) {
+                html += '<br><br><strong>Ranking:</strong><br>';
+                html += diagnosis.ranking.map((r, i) =>
+                    (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) +
+                    ' (' + r.metrics.totalLines + ' lineas)'
+                ).join('<br>');
+            }
+
+            box.innerHTML = html;
+            box.style.display = 'block';
+
+            logger.info("Mejor algoritmo: " + diagnosis.best);
+            diagnosis.reasons.forEach(r => logger.info("  " + r));
+        }
+
+        function updateLayerControls() {
+            const container = document.getElementById('layerControls');
+            container.innerHTML = '<strong>Capas (toca para mostrar/ocultar):</strong><br>';
+
+            algorithmResults.forEach(result => {
+                const toggle = document.createElement('div');
+                toggle.className = 'layer-toggle';
+                toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' +
+                                   result.algorithm + ': ' + result.metrics.totalLines;
+                
+                const exportBtn = document.createElement('button');
+                exportBtn.textContent = '💾';
+                exportBtn.style.cssText = 'margin-left:10px;padding:4px 8px;font-size:12px;background:#2196F3;';
+                exportBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    canvasManager.exportLayer(result.algorithm);
+                };
+                toggle.appendChild(exportBtn);
+                
+                toggle.onclick = () => {
+                    canvasManager.toggleLayer(result.algorithm);
+                    toggle.classList.toggle('inactive');
+                };
+                container.appendChild(toggle);
+            });
+        }
+
+        function cancelExecution() {
+            cancelRequested = true;
+            logger.info("Cancelacion solicitada...");
+        }
+
+        function showStatus(text) {
+            const el = document.getElementById('statusIndicator');
+            el.textContent = text;
+            el.style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('statusIndicator').style.display = 'none';
+        }
+
+        function copyLog() {
+            const text = logger.getLogsText();
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Log copiado");
+            }).catch(err => {
+                logger.error("Error al copiar: " + err);
+            });
+        }
+
+        function clearLog() {
+            logger.logs = [];
+            logger.startTime = Date.now();
+            updateLog();
+        }
+
+        function updateLog() {
+            const container = document.getElementById('logContainer');
+            container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        setInterval(updateLog, 500);
+        window.addEventListener("load", initApp);
+    </script>
 </body>
 </html>
