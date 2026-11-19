@@ -2,37 +2,47 @@ class GaborFilters {
   constructor() {
     this.name = 'Gabor Filters';
     this.color = '#FF00FF';
+    this.kernelSize = 9; // Reducido de 15 a 9
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Gabor Filters');
+    logger.info('Iniciando Gabor Filters (optimizado)');
     const start = Date.now();
     
     const width = imageData.width;
     const height = imageData.height;
-    const gray = new Float32Array(width * height);
     
-    for (let i = 0, j = 0; i < imageData.data.length; i += 4, j++) {
-      gray[j] = 0.299 * imageData.data[i] + 0.587 * imageData.data[i+1] + 0.114 * imageData.data[i+2];
+    // Reescalar para velocidad
+    const scale = Math.min(1, 600 / Math.max(width, height));
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    const gray = new Float32Array(sw * sh);
+    
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        const sx = Math.round(x / scale);
+        const sy = Math.round(y / scale);
+        const idx = (sy * width + sx) * 4;
+        gray[y * sw + x] = 0.299 * imageData.data[idx] + 0.587 * imageData.data[idx+1] + 0.114 * imageData.data[idx+2];
+      }
     }
     
     const lines = [];
-    const angles = [0, 45, 90, 135];
-    const lambda = 10;
-    const sigma = 3;
+    const angles = [0, 90]; // Solo horizontal y vertical para velocidad
+    const lambda = 8;
+    const sigma = 2.5;
     const gamma = 0.3;
+    const half = Math.floor(this.kernelSize / 2);
     
     for (const theta of angles) {
       const rad = theta * Math.PI / 180;
       const cos = Math.cos(rad);
       const sin = Math.sin(rad);
       
-      const response = new Float32Array(width * height);
-      const kernelSize = 15;
-      const half = Math.floor(kernelSize / 2);
+      const response = new Float32Array(sw * sh);
       
-      for (let y = half; y < height - half; y++) {
-        for (let x = half; x < width - half; x++) {
+      for (let y = half; y < sh - half; y += 2) { // Paso 2 para velocidad
+        for (let x = half; x < sw - half; x += 2) {
           let sum = 0;
           for (let ky = -half; ky <= half; ky++) {
             for (let kx = -half; kx <= half; kx++) {
@@ -40,30 +50,32 @@ class GaborFilters {
               const yPrime = -kx * sin + ky * cos;
               const gabor = Math.exp(-(xPrime*xPrime + gamma*gamma*yPrime*yPrime) / (2*sigma*sigma)) * 
                            Math.cos(2 * Math.PI * xPrime / lambda);
-              sum += gray[(y+ky) * width + (x+kx)] * gabor;
+              sum += gray[(y+ky) * sw + (x+kx)] * gabor;
             }
           }
-          response[y * width + x] = Math.abs(sum);
+          response[y * sw + x] = Math.abs(sum);
         }
       }
       
-      const threshold = 50;
-      for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-          if (response[y * width + x] > threshold) {
-            const isMax = response[y * width + x] > response[(y-1) * width + x] &&
-                         response[y * width + x] > response[(y+1) * width + x];
+      const threshold = 40;
+      for (let y = 1; y < sh - 1; y++) {
+        for (let x = 1; x < sw - 1; x++) {
+          if (response[y * sw + x] > threshold) {
+            const isMax = response[y * sw + x] > response[(y-1) * sw + x] &&
+                         response[y * sw + x] > response[(y+1) * sw + x];
             if (isMax && theta === 0) {
-              lines.push({ x1: 0, y1: y, x2: width-1, y2: y, angle: 0, length: width });
+              const oy = Math.round(y / scale);
+              lines.push({ x1: 0, y1: oy, x2: width-1, y2: oy, angle: 0, length: width });
             } else if (isMax && theta === 90) {
-              lines.push({ x1: x, y1: 0, x2: x, y2: height-1, angle: 90, length: height });
+              const ox = Math.round(x / scale);
+              lines.push({ x1: ox, y1: 0, x2: ox, y2: height-1, angle: 90, length: height });
             }
           }
         }
       }
     }
     
-    const merged = this.mergeLines(lines, 5);
+    const merged = this.mergeLines(lines, 8);
     const time = Date.now() - start;
     logger.info(`Gabor completado en ${time}ms. Líneas: ${merged.length}`);
     

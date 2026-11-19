@@ -2,65 +2,55 @@ class FrangiFilter {
   constructor() {
     this.name = 'Frangi Filter';
     this.color = '#00FFFF';
+    this.scales = [2, 3]; // Reducido de [1,2,3,4,5] a [2,3]
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Frangi Filter');
+    logger.info('Iniciando Frangi Filter (optimizado)');
     const start = Date.now();
     
     const width = imageData.width;
     const height = imageData.height;
-    const gray = new Float32Array(width * height);
     
-    for (let i = 0, j = 0; i < imageData.data.length; i += 4, j++) {
-      gray[j] = 0.299 * imageData.data[i] + 0.587 * imageData.data[i+1] + 0.114 * imageData.data[i+2];
+    // Reescalar para velocidad
+    const scale = Math.min(1, 600 / Math.max(width, height));
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+    const gray = new Float32Array(sw * sh);
+    
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        const sx = Math.round(x / scale);
+        const sy = Math.round(y / scale);
+        const idx = (sy * width + sx) * 4;
+        gray[y * sw + x] = 0.299 * imageData.data[idx] + 0.587 * imageData.data[idx+1] + 0.114 * imageData.data[idx+2];
+      }
     }
     
-    const scales = [1, 2, 3, 4, 5];
-    const vesselness = new Float32Array(width * height);
+    const vesselness = new Float32Array(sw * sh);
     
-    for (const sigma of scales) {
-      const kernelSize = Math.ceil(6 * sigma) | 1;
+    for (const sigma of this.scales) {
+      const kernelSize = Math.min(11, Math.ceil(4 * sigma) | 1);
       const half = Math.floor(kernelSize / 2);
       
-      const dxx = new Float32Array(width * height);
-      const dyy = new Float32Array(width * height);
-      const dxy = new Float32Array(width * height);
-      
-      for (let y = half; y < height - half; y++) {
-        for (let x = half; x < width - half; x++) {
-          const gxx = (gray[y * width + (x+1)] - 2 * gray[y * width + x] + gray[y * width + (x-1)]) / (sigma * sigma);
-          const gyy = (gray[(y+1) * width + x] - 2 * gray[y * width + x] + gray[(y-1) * width + x]) / (sigma * sigma);
-          const gxy = (gray[(y+1) * width + (x+1)] - gray[(y+1) * width + (x-1)] - 
-                      gray[(y-1) * width + (x+1)] + gray[(y-1) * width + (x-1)]) / (4 * sigma * sigma);
+      for (let y = half; y < sh - half; y++) {
+        for (let x = half; x < sw - half; x++) {
+          const gxx = (gray[y * sw + (x+1)] - 2 * gray[y * sw + x] + gray[y * sw + (x-1)]) / (sigma * sigma);
+          const gyy = (gray[(y+1) * sw + x] - 2 * gray[y * sw + x] + gray[(y-1) * sw + x]) / (sigma * sigma);
+          const gxy = (gray[(y+1) * sw + (x+1)] - gray[(y+1) * sw + (x-1)] - 
+                      gray[(y-1) * sw + (x+1)] + gray[(y-1) * sw + (x-1)]) / (4 * sigma * sigma);
           
-          dxx[y * width + x] = gxx;
-          dyy[y * width + x] = gyy;
-          dxy[y * width + x] = gxy;
-        }
-      }
-      
-      for (let y = half; y < height - half; y++) {
-        for (let x = half; x < width - half; x++) {
-          const idx = y * width + x;
-          const a = dxx[idx];
-          const b = dxy[idx];
-          const d = dyy[idx];
-          
-          const trace = a + d;
-          const det = a * d - b * b;
-          const lambda1 = (trace + Math.sqrt(trace * trace - 4 * det)) / 2;
-          const lambda2 = (trace - Math.sqrt(trace * trace - 4 * det)) / 2;
+          const trace = gxx + gyy;
+          const det = gxx * gyy - gxy * gxy;
+          const discriminant = Math.max(0, trace * trace - 4 * det);
+          const lambda1 = (trace + Math.sqrt(discriminant)) / 2;
+          const lambda2 = (trace - Math.sqrt(discriminant)) / 2;
           
           const Rb = Math.abs(lambda2) / Math.max(Math.abs(lambda1), 1e-10);
           const S = Math.sqrt(lambda1 * lambda1 + lambda2 * lambda2);
           
-          const alpha = 0.5;
-          const beta = 0.5;
-          const c = 15;
-          
-          const v = Math.exp(-Rb * Rb / (2 * beta * beta)) * (1 - Math.exp(-S * S / (2 * c * c)));
-          vesselness[idx] = Math.max(vesselness[idx], v);
+          const v = Math.exp(-Rb * Rb / 0.5) * (1 - Math.exp(-S * S / 450));
+          vesselness[y * sw + x] = Math.max(vesselness[y * sw + x], v);
         }
       }
     }
@@ -68,21 +58,27 @@ class FrangiFilter {
     const lines = [];
     const threshold = 0.3;
     
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        if (vesselness[y * width + x] > threshold) {
-          const isMaxH = vesselness[y * width + x] > vesselness[(y-1) * width + x] &&
-                        vesselness[y * width + x] > vesselness[(y+1) * width + x];
-          const isMaxV = vesselness[y * width + x] > vesselness[y * width + (x-1)] &&
-                        vesselness[y * width + x] > vesselness[y * width + (x+1)];
+    for (let y = 1; y < sh - 1; y++) {
+      for (let x = 1; x < sw - 1; x++) {
+        if (vesselness[y * sw + x] > threshold) {
+          const isMaxH = vesselness[y * sw + x] > vesselness[(y-1) * sw + x] &&
+                        vesselness[y * sw + x] > vesselness[(y+1) * sw + x];
+          const isMaxV = vesselness[y * sw + x] > vesselness[y * sw + (x-1)] &&
+                        vesselness[y * sw + x] > vesselness[y * sw + (x+1)];
           
-          if (isMaxH) lines.push({ x1: 0, y1: y, x2: width-1, y2: y, angle: 0, length: width });
-          if (isMaxV) lines.push({ x1: x, y1: 0, x2: x, y2: height-1, angle: 90, length: height });
+          if (isMaxH) {
+            const oy = Math.round(y / scale);
+            lines.push({ x1: 0, y1: oy, x2: width-1, y2: oy, angle: 0, length: width });
+          }
+          if (isMaxV) {
+            const ox = Math.round(x / scale);
+            lines.push({ x1: ox, y1: 0, x2: ox, y2: height-1, angle: 90, length: height });
+          }
         }
       }
     }
     
-    const merged = this.mergeLines(lines, 5);
+    const merged = this.mergeLines(lines, 8);
     const time = Date.now() - start;
     logger.info(`Frangi completado en ${time}ms. Líneas: ${merged.length}`);
     

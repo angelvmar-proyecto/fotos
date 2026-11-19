@@ -233,7 +233,12 @@ class CanvasManager {
   
   exportLayer(name) {
     const layer = this.layers.get(name);
-    if (!layer) return;
+    if (!layer) {
+      logger.error(`Capa ${name} no encontrada`);
+      return;
+    }
+    
+    logger.info(`Exportando capa: ${name}`);
     
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = this.imgWidth;
@@ -250,10 +255,12 @@ class CanvasManager {
       const a = document.createElement('a');
       a.href = url;
       a.download = `${name.replace(/\s+/g, '_')}.png`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
       logger.info(`Exportado: ${name}.png`);
-    });
+    }, 'image/png');
   }
   
   render() {

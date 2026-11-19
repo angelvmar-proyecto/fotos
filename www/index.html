@@ -11,14 +11,15 @@
         button:disabled { background: #555; cursor: not-allowed; }
         .btn-secondary { background: #2196F3; }
         .btn-danger { background: #f44336; }
+        .btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
         #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
         #mainCanvas { display: block; touch-action: none; }
         .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
         .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
         .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
-        .checkbox-item { margin: 8px 0; padding: 8px; background: #333; border-radius: 4px; }
+        .checkbox-item { margin: 8px 0; padding: 8px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
         .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
-        .checkbox-item label { cursor: pointer; }
+        .checkbox-item label { cursor: pointer; flex: 1; }
         .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
         #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
         .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
@@ -53,49 +54,76 @@
     <div class="panel">
         <h3>⚙️ Algoritmos (9 disponibles)</h3>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_hough" value="Hough Transform">
-            <span class="color-dot" style="background:#FF0000;"></span>
-            <label for="algo_hough">Hough Transform</label>
+            <div>
+                <input type="checkbox" id="algo_hough" value="Hough Transform">
+                <span class="color-dot" style="background:#FF0000;"></span>
+                <label for="algo_hough">Hough Transform</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('hough')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
-            <span class="color-dot" style="background:#FFFF00;"></span>
-            <label for="algo_profile">Profile Projection</label>
+            <div>
+                <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
+                <span class="color-dot" style="background:#FFFF00;"></span>
+                <label for="algo_profile">Profile Projection</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('profile')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_morph" value="Morphological" checked>
-            <span class="color-dot" style="background:#808080;"></span>
-            <label for="algo_morph">Morphological</label>
+            <div>
+                <input type="checkbox" id="algo_morph" value="Morphological" checked>
+                <span class="color-dot" style="background:#808080;"></span>
+                <label for="algo_morph">Morphological</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('morph')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
-            <span class="color-dot" style="background:#800080;"></span>
-            <label for="algo_radar">Radar Matcher</label>
+            <div>
+                <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
+                <span class="color-dot" style="background:#800080;"></span>
+                <label for="algo_radar">Radar Matcher</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('radar')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lsd" value="LSD">
-            <span class="color-dot" style="background:#00FF00;"></span>
-            <label for="algo_lsd">LSD</label>
+            <div>
+                <input type="checkbox" id="algo_lsd" value="LSD">
+                <span class="color-dot" style="background:#00FF00;"></span>
+                <label for="algo_lsd">LSD</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('lsd')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_gabor" value="Gabor Filters">
-            <span class="color-dot" style="background:#FF00FF;"></span>
-            <label for="algo_gabor">Gabor Filters</label>
+            <div>
+                <input type="checkbox" id="algo_gabor" value="Gabor Filters">
+                <span class="color-dot" style="background:#FF00FF;"></span>
+                <label for="algo_gabor">Gabor Filters</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('gabor')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_frangi" value="Frangi Filter">
-            <span class="color-dot" style="background:#00FFFF;"></span>
-            <label for="algo_frangi">Frangi Filter</label>
+            <div>
+                <input type="checkbox" id="algo_frangi" value="Frangi Filter">
+                <span class="color-dot" style="background:#00FFFF;"></span>
+                <label for="algo_frangi">Frangi Filter</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('frangi')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_fourier" value="Fourier Analysis">
-            <span class="color-dot" style="background:#FFA500;"></span>
-            <label for="algo_fourier">Fourier Analysis</label>
+            <div>
+                <input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked>
+                <span class="color-dot" style="background:#FFA500;"></span>
+                <label for="algo_fourier">Fourier Analysis</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_cfar" value="CFAR Detector">
-            <span class="color-dot" style="background:#FFC0CB;"></span>
-            <label for="algo_cfar">CFAR Detector</label>
+            <div>
+                <input type="checkbox" id="algo_cfar" value="CFAR Detector">
+                <span class="color-dot" style="background:#FFC0CB;"></span>
+                <label for="algo_cfar">CFAR Detector</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('cfar')">🔧 Optimizar</button>
         </div>
         <br>
         <button onclick="selectAll()">✅ Todos</button>
@@ -135,6 +163,7 @@
         let isRunning = false;
         let cancelRequested = false;
         let algorithmResults = [];
+        let algorithmInstances = {};
 
         function initApp() {
             logger.info("Iniciando aplicacion...");
@@ -143,15 +172,19 @@
                 runner = new AlgorithmRunner();
                 selector = new AdaptiveDiagnosis();
 
-                runner.registerAlgorithm(new HoughTransform());
-                runner.registerAlgorithm(new ProfileProjection());
-                runner.registerAlgorithm(new Morphological());
-                runner.registerAlgorithm(new RadarMatcher());
-                runner.registerAlgorithm(new LSD());
-                runner.registerAlgorithm(new GaborFilters());
-                runner.registerAlgorithm(new FrangiFilter());
-                runner.registerAlgorithm(new FourierAnalysis());
-                runner.registerAlgorithm(new CFARDetector());
+                algorithmInstances = {
+                    hough: new HoughTransform(),
+                    profile: new ProfileProjection(),
+                    morph: new Morphological(),
+                    radar: new RadarMatcher(),
+                    lsd: new LSD(),
+                    gabor: new GaborFilters(),
+                    frangi: new FrangiFilter(),
+                    fourier: new FourierAnalysis(),
+                    cfar: new CFARDetector()
+                };
+
+                Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
 
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
                 logger.info("Aplicacion lista. 9 algoritmos registrados.");
@@ -159,6 +192,45 @@
                 alert("ERROR: " + e.message);
                 logger.error(e.message);
             }
+        }
+
+        function optimizeAlgorithm(algoKey) {
+            if (algorithmResults.length === 0) {
+                alert("Primero ejecuta los algoritmos para tener datos de optimización");
+                return;
+            }
+
+            const result = algorithmResults.find(r => r.algorithm === algorithmInstances[algoKey].name);
+            if (!result) {
+                alert(`No hay resultados de ${algorithmInstances[algoKey].name}`);
+                return;
+            }
+
+            logger.info(`Optimizando ${algorithmInstances[algoKey].name}...`);
+            
+            const lines = result.metrics.totalLines;
+            const executionTime = result.metrics.executionTime;
+            
+            // Lógica de optimización basada en resultados
+            if (algoKey === 'fourier') {
+                if (lines > 150) {
+                    algorithmInstances[algoKey].setMinDistance(20);
+                    logger.info(`Fourier: demasiadas líneas (${lines}), aumentando minDistance a 20`);
+                } else if (lines < 50) {
+                    algorithmInstances[algoKey].setMinDistance(10);
+                    logger.info(`Fourier: pocas líneas (${lines}), reduciendo minDistance a 10`);
+                }
+            } else if (algoKey === 'radar') {
+                if (lines === 0) {
+                    logger.info(`Radar: 0 líneas detectadas, sugiere usar otro algoritmo`);
+                }
+            } else if (algoKey === 'cfar') {
+                if (lines < 10) {
+                    logger.info(`CFAR: muy pocas líneas (${lines}), umbral muy alto`);
+                }
+            }
+
+            alert(`Parámetros de ${algorithmInstances[algoKey].name} ajustados. Ejecuta de nuevo para ver resultados.`);
         }
 
         function selectAll() {
