@@ -2,17 +2,16 @@ class LSD {
   constructor() {
     this.name = 'LSD';
     this.color = '#00FF00';
-    this.textRemover = new TextRemover();
     this.angleStep = 3;
     this.minLength = 25;
   }
 
   async detect(imageData) {
-    logger.info('Iniciando LSD con eliminacion de texto...');
+    logger.info('Iniciando LSD (SIN eliminacion de texto)...');
     const start = Date.now();
 
-    const cleanedImage = this.textRemover.removeText(imageData);
-    const gray = this.toGrayscale(cleanedImage);
+    // NO usar text-remover, trabajar directamente con bordes
+    const gray = this.toGrayscale(imageData);
     const edges = this.sobelEdges(gray);
     
     const lines = [];
