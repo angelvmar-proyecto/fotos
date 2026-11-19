@@ -53,7 +53,7 @@ class HoughTransform {
     }
     
     // 7. Umbral adaptativo
-    const threshold = Math.max(30, Math.floor(edgeCount * 0.003));
+    const threshold = Math.max(20, Math.floor(edgeCount * 0.002));
     logger.info(`  Umbral adaptativo: ${threshold}`);
     
     // 8. NMS + extraccion de picos

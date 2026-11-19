@@ -2,8 +2,8 @@ class LSD {
   constructor() {
     this.name = 'LSD';
     this.color = '#00FF00';
-    this.angleStep = 5; // Aumentado de 2 a 5 para velocidad
-    this.minLength = 50; // Aumentado de 30 a 50
+    this.angleStep = 3; // Aumentado de 2 a 5 para velocidad
+    this.minLength = 25; // Aumentado de 30 a 50
   }
   
   async detect(imageData) {

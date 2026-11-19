@@ -2,17 +2,20 @@ class RadarMatcher {
   constructor() { 
     this.name = 'Radar Matcher'; 
     this.color = '#800080';
+    this.kernelSize = 6;  // Reducido de 20 a 6 para líneas finas
+    this.step = 2;        // Reducido de 3 a 2 para más precisión
+    this.threshold = 3;   // Reducido de 4 a 3
+    this.minLineLength = 15; // Reducido de 20 a 15
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Radar Matcher (optimizado)');
+    logger.info('Iniciando Radar Matcher (kernel pequeño para líneas finas)');
     const start = Date.now();
     
-    // 1. Reescalar para velocidad (max 800px)
-    const { data: scaled, width: sw, height: sh, scale } = this.downscale(imageData, 800);
+    // Reescalado mínimo (max 1200px en vez de 800px)
+    const { data: scaled, width: sw, height: sh, scale } = this.downscale(imageData, 1200);
     logger.info('  Imagen reescalada a ' + sw + 'x' + sh + ' (factor: ' + scale.toFixed(3) + ')');
     
-    // 2. Preprocesamiento sobre imagen reescalada
     const preprocessed = preprocessor.process(scaled);
     const preMetrics = preprocessor.getMetrics();
     
@@ -20,21 +23,19 @@ class RadarMatcher {
     const height = preprocessed.height;
     const data = preprocessed.data;
     
-    // 3. Determinar tamaño del kernel según densidad
     const darkPixels = data.reduce((sum, val) => sum + val, 0);
     const density = darkPixels / (width * height);
-    const kernelSize = density > 0.3 ? 12 : 20;
+    
+    // Kernel adaptativo basado en densidad
+    const kernelSize = density > 0.15 ? 8 : this.kernelSize;
     logger.info('  Densidad: ' + (density * 100).toFixed(1) + '%, Kernel: ' + kernelSize + 'px');
     
     const halfKernel = Math.floor(kernelSize / 2);
-    
-    // 4. Escanear con kernel en cruz (paso 3 para velocidad)
     const intersections = [];
-    const step = 3;
-    const maxIntersections = 5000; // Tope duro
+    const maxIntersections = 8000; // Aumentado de 5000 a 8000
     
-    for (let y = halfKernel; y < height - halfKernel && intersections.length < maxIntersections; y += step) {
-      for (let x = halfKernel; x < width - halfKernel && intersections.length < maxIntersections; x += step) {
+    for (let y = halfKernel; y < height - halfKernel && intersections.length < maxIntersections; y += this.step) {
+      for (let x = halfKernel; x < width - halfKernel && intersections.length < maxIntersections; x += this.step) {
         const hasUp = this.checkDirection(data, width, x, y, 0, -1, halfKernel);
         const hasDown = this.checkDirection(data, width, x, y, 0, 1, halfKernel);
         const hasLeft = this.checkDirection(data, width, x, y, -1, 0, halfKernel);
@@ -48,17 +49,12 @@ class RadarMatcher {
     
     logger.info('  Intersecciones detectadas: ' + intersections.length);
     
-    // 5. Agrupar con hash espacial (O(n) en vez de O(n²))
     const groupedIntersections = this.groupIntersectionsSpatial(intersections, kernelSize);
     logger.info('  Intersecciones tras agrupar: ' + groupedIntersections.length);
     
-    // 6. Generar líneas
     const lines = this.generateLines(groupedIntersections, width, height);
+    const filteredLines = lines.filter(l => l.length > this.minLineLength);
     
-    // 7. Filtrar líneas cortas
-    const filteredLines = lines.filter(l => l.length > 20);
-    
-    // 8. Reescalar coordenadas al tamaño original
     const finalLines = filteredLines.map(l => ({
       x1: Math.round(l.x1 / scale),
       y1: Math.round(l.y1 / scale),
@@ -68,7 +64,7 @@ class RadarMatcher {
       length: Math.round(l.length / scale)
     }));
     
-    logger.info('  Lineas validas (>20px): ' + finalLines.length);
+    logger.info('  Lineas validas (>' + this.minLineLength + 'px): ' + finalLines.length);
     
     const time = Date.now() - start;
     logger.info('Radar Matcher completado en ' + time + 'ms. Lineas: ' + finalLines.length);
@@ -100,7 +96,6 @@ class RadarMatcher {
     
     if (scale === 1) return { data: imageData, width, height, scale: 1 };
     
-    // Crear nueva estructura imageData
     const newData = new Uint8ClampedArray(nw * nh * 4);
     for (let y = 0; y < nh; y++) {
       for (let x = 0; x < nw; x++) {
@@ -120,7 +115,6 @@ class RadarMatcher {
   
   checkDirection(data, width, startX, startY, dx, dy, maxDistance) {
     let darkCount = 0;
-    const threshold = 4;
     
     for (let i = 1; i <= maxDistance; i++) {
       const x = startX + dx * i;
@@ -131,21 +125,19 @@ class RadarMatcher {
       const idx = y * width + x;
       if (data[idx] === 1) {
         darkCount++;
-        if (darkCount >= threshold) return true;
+        if (darkCount >= this.threshold) return true;
       }
     }
     
     return false;
   }
   
-  // Hash espacial para agrupamiento O(n)
   groupIntersectionsSpatial(intersections, minDistance) {
     if (intersections.length === 0) return [];
     
     const cellSize = minDistance;
     const grid = new Map();
     
-    // Insertar en grid
     for (const p of intersections) {
       const cellX = Math.floor(p.x / cellSize);
       const cellY = Math.floor(p.y / cellSize);
@@ -155,7 +147,6 @@ class RadarMatcher {
       grid.get(key).push(p);
     }
     
-    // Agrupar clusters
     const grouped = [];
     const used = new Set();
     
@@ -166,7 +157,6 @@ class RadarMatcher {
         const cluster = [p];
         used.add(p);
         
-        // Buscar en celdas vecinas
         const [cx, cy] = key.split(',').map(Number);
         for (let dx = -1; dx <= 1; dx++) {
           for (let dy = -1; dy <= 1; dy++) {
@@ -185,7 +175,6 @@ class RadarMatcher {
           }
         }
         
-        // Calcular centroide
         const centerX = Math.round(cluster.reduce((sum, p) => sum + p.x, 0) / cluster.length);
         const centerY = Math.round(cluster.reduce((sum, p) => sum + p.y, 0) / cluster.length);
         
@@ -198,12 +187,10 @@ class RadarMatcher {
   
   generateLines(intersections, width, height) {
     const lines = [];
-    
     const rows = new Map();
     const cols = new Map();
     
     for (const p of intersections) {
-      // Agrupar por Y
       let foundRow = false;
       for (const [y, xs] of rows.entries()) {
         if (Math.abs(y - p.y) < 4) {
@@ -214,7 +201,6 @@ class RadarMatcher {
       }
       if (!foundRow) rows.set(p.y, [p.x]);
       
-      // Agrupar por X
       let foundCol = false;
       for (const [x, ys] of cols.entries()) {
         if (Math.abs(x - p.x) < 4) {
@@ -226,29 +212,21 @@ class RadarMatcher {
       if (!foundCol) cols.set(p.x, [p.y]);
     }
     
-    // Generar líneas horizontales
     for (const [y, xs] of rows.entries()) {
       if (xs.length >= 2) {
         xs.sort((a, b) => a - b);
         const x1 = xs[0];
         const x2 = xs[xs.length - 1];
-        lines.push({
-          x1: x1, y1: y, x2: x2, y2: y,
-          angle: 0, length: x2 - x1
-        });
+        lines.push({ x1: x1, y1: y, x2: x2, y2: y, angle: 0, length: x2 - x1 });
       }
     }
     
-    // Generar líneas verticales
     for (const [x, ys] of cols.entries()) {
       if (ys.length >= 2) {
         ys.sort((a, b) => a - b);
         const y1 = ys[0];
         const y2 = ys[ys.length - 1];
-        lines.push({
-          x1: x, y1: y1, x2: x, y2: y2,
-          angle: 90, length: y2 - y1
-        });
+        lines.push({ x1: x, y1: y1, x2: x, y2: y2, angle: 90, length: y2 - y1 });
       }
     }
     

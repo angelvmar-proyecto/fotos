@@ -2,10 +2,13 @@ class CFARDetector {
   constructor() {
     this.name = 'CFAR Detector';
     this.color = '#FFC0CB';
+    this.guardCells = 2;
+    this.trainingCells = 8;  // Aumentado de 5 a 8
+    this.thresholdFactor = 1.6; // Reducido de 2.5 a 1.6
   }
   
   async detect(imageData) {
-    logger.info('Iniciando CFAR Detector');
+    logger.info('Iniciando CFAR Detector (umbral reducido)');
     const start = Date.now();
     
     const width = imageData.width;
@@ -17,16 +20,13 @@ class CFARDetector {
     }
     
     const lines = [];
-    const guardCells = 2;
-    const trainingCells = 5;
-    const thresholdFactor = 2.5;
     
     const hDetection = new Uint8Array(width * height);
-    for (let y = trainingCells + guardCells; y < height - trainingCells - guardCells; y++) {
+    for (let y = this.trainingCells + this.guardCells; y < height - this.trainingCells - this.guardCells; y++) {
       for (let x = 0; x < width; x++) {
         let sum = 0, count = 0;
-        for (let t = -trainingCells - guardCells; t <= trainingCells + guardCells; t++) {
-          if (Math.abs(t) > guardCells) {
+        for (let t = -this.trainingCells - this.guardCells; t <= this.trainingCells + this.guardCells; t++) {
+          if (Math.abs(t) > this.guardCells) {
             const ty = y + t;
             if (ty >= 0 && ty < height) {
               sum += gray[ty * width + x];
@@ -36,7 +36,7 @@ class CFARDetector {
         }
         const avg = sum / count;
         const cellValue = gray[y * width + x];
-        if (cellValue < avg * thresholdFactor) {
+        if (cellValue < avg * this.thresholdFactor) {
           hDetection[y * width + x] = 1;
         }
       }
@@ -46,11 +46,11 @@ class CFARDetector {
     lines.push(...hLines);
     
     const vDetection = new Uint8Array(width * height);
-    for (let x = trainingCells + guardCells; x < width - trainingCells - guardCells; x++) {
+    for (let x = this.trainingCells + this.guardCells; x < width - this.trainingCells - this.guardCells; x++) {
       for (let y = 0; y < height; y++) {
         let sum = 0, count = 0;
-        for (let t = -trainingCells - guardCells; t <= trainingCells + guardCells; t++) {
-          if (Math.abs(t) > guardCells) {
+        for (let t = -this.trainingCells - this.guardCells; t <= this.trainingCells + this.guardCells; t++) {
+          if (Math.abs(t) > this.guardCells) {
             const tx = x + t;
             if (tx >= 0 && tx < width) {
               sum += gray[y * width + tx];
@@ -60,7 +60,7 @@ class CFARDetector {
         }
         const avg = sum / count;
         const cellValue = gray[y * width + x];
-        if (cellValue < avg * thresholdFactor) {
+        if (cellValue < avg * this.thresholdFactor) {
           vDetection[y * width + x] = 1;
         }
       }
@@ -89,7 +89,7 @@ class CFARDetector {
         for (let x = 0; x < width; x++) {
           if (detection[y * width + x]) count++;
         }
-        if (count > width * 0.3) {
+        if (count > width * 0.25) { // Reducido de 0.3 a 0.25
           lines.push({ x1: 0, y1: y, x2: width-1, y2: y, angle: 0, length: width });
         }
       }
@@ -99,7 +99,7 @@ class CFARDetector {
         for (let y = 0; y < height; y++) {
           if (detection[y * width + x]) count++;
         }
-        if (count > height * 0.3) {
+        if (count > height * 0.25) { // Reducido de 0.3 a 0.25
           lines.push({ x1: x, y1: 0, x2: x, y2: height-1, angle: 90, length: height });
         }
       }
