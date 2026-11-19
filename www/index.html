@@ -111,9 +111,10 @@
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked>
+                <input type="checkbox" id="algo_fourier_adv" value="Fourier Avanzado" checked>
                 <span class="color-dot" style="background:#FFA500;"></span>
-                <label for="algo_fourier">Fourier Analysis</label>
+                <label for="algo_fourier_adv">Fourier Avanzado (Pasa-Bajas + Valle)</label>
+                <select id="fourierLevel" style="margin-left:10px;padding:4px;background:#444;color:#fff;border:1px solid #666;border-radius:3px;"><option value="all">Todos los niveles</option><option value="thick">Solo gruesas (rejilla)</option><option value="medium">Solo medianas</option><option value="thin">Solo finas (texto)</option></select>
             </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
         </div>
@@ -152,12 +153,14 @@
     <script src="js/algorithms/profile-projection.js"></script>
     <script src="js/algorithms/morphological.js"></script>
     <script src="js/algorithms/radar-matcher.js"></script>
+    <script src="js/algorithms/radar-matcher-v2.js"></script>
     <script src="js/algorithms/lsd.js"></script>
     <script src="js/algorithms/gabor.js"></script>
     <script src="js/algorithms/frangi.js"></script>
     <script src="js/algorithms/fourier.js"></script>
     <script src="js/algorithms/cfar.js"></script>
     <script src="js/runner.js"></script>
+    <script src="js/runner/advanced-runner.js"></script>
     <script src="js/diagnosis/adaptive-diagnosis.js"></script>
 
     <script>
@@ -301,6 +304,10 @@
                 if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
 
                 const algoName = selected[i];
+                if (algoName === "Fourier Analysis") {
+                    const level = document.getElementById("fourierLevel").value;
+                    algorithmInstances.fourier.setDetectionLevel(level);
+                }
                 showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
                 await new Promise(r => setTimeout(r, 30));
 
