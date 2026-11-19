@@ -2,19 +2,27 @@ class RadarMatcher {
   constructor() { 
     this.name = 'Radar Matcher'; 
     this.color = '#800080';
-    this.kernelSize = 6;  // Reducido de 20 a 6 para líneas finas
-    this.step = 2;        // Reducido de 3 a 2 para más precisión
-    this.threshold = 3;   // Reducido de 4 a 3
-    this.minLineLength = 15; // Reducido de 20 a 15
+    this.kernelSize = 6;
+    this.step = 2;
+    this.threshold = 3;
+    this.minLineLength = 15;
   }
   
   async detect(imageData) {
     logger.info('Iniciando Radar Matcher (kernel pequeño para líneas finas)');
     const start = Date.now();
     
-    // Reescalado mínimo (max 1200px en vez de 800px)
-    const { data: scaled, width: sw, height: sh, scale } = this.downscale(imageData, 1200);
-    logger.info('  Imagen reescalada a ' + sw + 'x' + sh + ' (factor: ' + scale.toFixed(3) + ')');
+    // Reescalado adaptativo: usar dimensión más grande como referencia
+    const maxDim = Math.max(imageData.width, imageData.height);
+    const aspect = imageData.width / imageData.height;
+    
+    // Para imágenes anchas (aspecto > 2:1), reescalar menos
+    let maxSize = 1200;
+    if (aspect > 2.5) maxSize = 1600;  // Imágenes muy anchas
+    else if (aspect > 2) maxSize = 1400;
+    
+    const { data: scaled, width: sw, height: sh, scale } = this.downscale(imageData, maxSize);
+    logger.info('  Imagen reescalada a ' + sw + 'x' + sh + ' (factor: ' + scale.toFixed(3) + ', aspecto: ' + aspect.toFixed(2) + ')');
     
     const preprocessed = preprocessor.process(scaled);
     const preMetrics = preprocessor.getMetrics();
@@ -32,7 +40,7 @@ class RadarMatcher {
     
     const halfKernel = Math.floor(kernelSize / 2);
     const intersections = [];
-    const maxIntersections = 8000; // Aumentado de 5000 a 8000
+    const maxIntersections = 8000;
     
     for (let y = halfKernel; y < height - halfKernel && intersections.length < maxIntersections; y += this.step) {
       for (let x = halfKernel; x < width - halfKernel && intersections.length < maxIntersections; x += this.step) {
@@ -81,7 +89,8 @@ class RadarMatcher {
         intersectionsDetected: intersections.length,
         intersectionsGrouped: groupedIntersections.length,
         kernelSize: kernelSize,
-        density: density
+        density: density,
+        aspectRatio: aspect
       } 
     };
   }

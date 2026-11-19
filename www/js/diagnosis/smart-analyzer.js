@@ -8,28 +8,26 @@ class SmartAnalyzer {
     const width = imageData.width;
     const height = imageData.height;
     const data = imageData.data;
+    const aspect = width / height;
 
     let sumR = 0, sumG = 0, sumB = 0;
     let minVal = 255, maxVal = 0;
-    const histogram = new Array(256).fill(0);
 
     for (let i = 0; i < data.length; i += 4) {
       const gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
       sumR += data[i]; sumG += data[i+1]; sumB += data[i+2];
       if (gray < minVal) minVal = gray;
       if (gray > maxVal) maxVal = gray;
-      histogram[gray]++;
     }
 
     const totalPixels = width * height;
     const meanGray = (sumR + sumG + sumB) / (3 * totalPixels);
     const contrast = maxVal - minVal;
-
     const isDark = meanGray < 128;
 
     let edgeCount = 0;
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
+    for (let y = 1; y < height - 1; y += 2) {
+      for (let x = 1; x < width - 1; x += 2) {
         const idx = (y * width + x) * 4;
         const idxR = (y * width + x + 1) * 4;
         const idxD = ((y + 1) * width + x) * 4;
@@ -41,13 +39,13 @@ class SmartAnalyzer {
         if (grad > 30) edgeCount++;
       }
     }
-    const edgeDensity = edgeCount / totalPixels;
+    const edgeDensity = edgeCount / (totalPixels / 4);
 
     const hProj = new Array(height).fill(0);
     const vProj = new Array(width).fill(0);
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y += 2) {
+      for (let x = 0; x < width; x += 2) {
         const idx = (y * width + x) * 4;
         const gray = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
         if (gray < 128) {
@@ -59,9 +57,7 @@ class SmartAnalyzer {
 
     const hPeaks = this.countPeaks(hProj, 10);
     const vPeaks = this.countPeaks(vProj, 10);
-
     const avgLineThickness = this.estimateLineThickness(hProj, vProj);
-
     const skewAngle = this.estimateSkew(hProj);
 
     const imageType = this.classifyImageType({
@@ -71,12 +67,13 @@ class SmartAnalyzer {
       hPeaks,
       vPeaks,
       avgLineThickness,
-      aspectRatio: width / height
+      aspectRatio: aspect
     });
 
     this.imageProfile = {
       width,
       height,
+      aspectRatio: aspect.toFixed(2),
       meanGray: Math.round(meanGray),
       contrast,
       edgeDensity: (edgeDensity * 100).toFixed(2),
@@ -90,7 +87,7 @@ class SmartAnalyzer {
     };
 
     logger.info('=== ANALISIS DE IMAGEN ===');
-    logger.info('Tamano: ' + width + 'x' + height + ' (aspecto: ' + (width/height).toFixed(2) + ')');
+    logger.info('Tamano: ' + width + 'x' + height + ' (aspecto: ' + aspect.toFixed(2) + ')');
     logger.info('Brillo promedio: ' + this.imageProfile.meanGray + (isDark ? ' (OSCURA)' : ' (CLARA)'));
     logger.info('Contraste: ' + contrast);
     logger.info('Densidad de bordes: ' + this.imageProfile.edgeDensity + '%');
@@ -169,6 +166,12 @@ class SmartAnalyzer {
   classifyImageType(stats) {
     if (stats.edgeDensity < 0.02) return 'FOTO_NATURAL';
     
+    // Detectar imágenes muy anchas
+    if (stats.aspectRatio > 2.5) {
+      if (stats.isDark) return 'TABLA_ANCHA_OSCURA';
+      return 'TABLA_ANCHA_CLARA';
+    }
+    
     if (stats.isDark) {
       if (stats.avgLineThickness > 2.5) return 'TABLA_OSCURA_GRUESA';
       return 'TABLA_OSCURA_FINA';
@@ -194,6 +197,17 @@ class SmartAnalyzer {
     };
 
     switch (profile.imageType) {
+      case 'TABLA_ANCHA_CLARA':
+      case 'TABLA_ANCHA_OSCURA':
+        suggestions.primary.push('Echo Radar', 'Radar Matcher');
+        suggestions.secondary.push('Fourier Analysis', 'Profile Projection');
+        suggestions.params = {
+          'Echo Radar': { minCoverage: 0.4, minRunRatio: 0.4, gapTolerance: 6 },
+          'Radar Matcher': { kernelSize: 8, threshold: 2 }
+        };
+        logger.info('Imagen muy ancha detectada - usando reescalado conservador para Radar Matcher');
+        break;
+
       case 'TABLA_DENSA_GRUESA':
         suggestions.primary.push('Echo Radar', 'Morphological');
         suggestions.secondary.push('Fourier Analysis', 'Profile Projection');
