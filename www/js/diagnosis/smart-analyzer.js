@@ -131,20 +131,20 @@ class SmartAnalyzer {
     [hProj, vProj].forEach(proj => {
       const min = Math.min(...proj);
       const max = Math.max(...proj);
-      const threshold = min + (max - min) * 0.25;
+      const threshold = min + (max - min) * 0.7; // Umbral alto para detectar PICOS (líneas)
       
-      let inValley = false;
-      let valleyStart = 0;
+      let inPeak = false;
+      let peakStart = 0;
       
       for (let i = 0; i < proj.length; i++) {
-        if (proj[i] < threshold) {
-          if (!inValley) {
-            inValley = true;
-            valleyStart = i;
+        if (proj[i] > threshold) { // PICOS = líneas
+          if (!inPeak) {
+            inPeak = true;
+            peakStart = i;
           }
-        } else if (inValley) {
-          widths.push(i - valleyStart);
-          inValley = false;
+        } else if (inPeak) {
+          widths.push(i - peakStart);
+          inPeak = false;
         }
       }
     });
@@ -166,7 +166,6 @@ class SmartAnalyzer {
   classifyImageType(stats) {
     if (stats.edgeDensity < 0.02) return 'FOTO_NATURAL';
     
-    // Detectar imágenes muy anchas
     if (stats.aspectRatio > 2.5) {
       if (stats.isDark) return 'TABLA_ANCHA_OSCURA';
       return 'TABLA_ANCHA_CLARA';
