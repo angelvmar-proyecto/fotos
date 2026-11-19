@@ -4,19 +4,16 @@ class CanvasManager {
     this.ctx = this.canvas.getContext('2d');
     this.layers = new Map();
     
-    // Estado de transformacion
     this.scale = 1;
     this.offsetX = 0;
     this.offsetY = 0;
-    this.minScale = 0.5;
-    this.maxScale = 10;
+    this.minScale = 0.1;
+    this.maxScale = 20;
     
-    // Estado de imagen
     this.imageData = null;
     this.imgWidth = 0;
     this.imgHeight = 0;
     
-    // Estado de gestos
     this.isDragging = false;
     this.lastX = 0;
     this.lastY = 0;
@@ -24,21 +21,29 @@ class CanvasManager {
     this.lastPinchCenter = null;
     
     this.setupEventListeners();
+    this.setupResizeObserver();
+  }
+  
+  setupResizeObserver() {
+    const container = this.canvas.parentElement;
+    const resizeObserver = new ResizeObserver(() => {
+      if (this.imageData) {
+        this.fitToContainer();
+      }
+    });
+    resizeObserver.observe(container);
   }
   
   setupEventListeners() {
-    // Rueda del mouse (PC)
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const rect = this.canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-      
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       this.zoomAt(mouseX, mouseY, delta);
     }, { passive: false });
     
-    // Mouse (PC)
     this.canvas.addEventListener('mousedown', (e) => {
       this.isDragging = true;
       this.lastX = e.clientX;
@@ -67,7 +72,6 @@ class CanvasManager {
       this.canvas.style.cursor = 'grab';
     });
     
-    // Tactil (movil)
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       if (e.touches.length === 1) {
@@ -99,16 +103,13 @@ class CanvasManager {
           const rect = this.canvas.getBoundingClientRect();
           const centerX = newCenter.x - rect.left;
           const centerY = newCenter.y - rect.top;
-          
           const zoomFactor = newDist / this.lastPinchDist;
           this.zoomAt(centerX, centerY, zoomFactor);
           
-          // Pan durante pinch
           if (this.lastPinchCenter) {
             this.offsetX += newCenter.x - this.lastPinchCenter.x;
             this.offsetY += newCenter.y - this.lastPinchCenter.y;
           }
-          
           this.render();
         }
         
@@ -150,12 +151,34 @@ class CanvasManager {
   zoomAt(centerX, centerY, factor) {
     const newScale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
     const actualFactor = newScale / this.scale;
-    
-    // Ajustar offset para que el zoom se centre en el punto
     this.offsetX = centerX - (centerX - this.offsetX) * actualFactor;
     this.offsetY = centerY - (centerY - this.offsetY) * actualFactor;
-    
     this.scale = newScale;
+    this.render();
+  }
+  
+  fitToContainer() {
+    const container = this.canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    this.canvas.width = containerWidth;
+    this.canvas.height = containerHeight;
+    
+    const imgAspect = this.imgWidth / this.imgHeight;
+    const containerAspect = containerWidth / containerHeight;
+    
+    let fitScale;
+    if (imgAspect > containerAspect) {
+      fitScale = containerWidth / this.imgWidth;
+    } else {
+      fitScale = containerHeight / this.imgHeight;
+    }
+    
+    this.scale = fitScale;
+    this.offsetX = (containerWidth - this.imgWidth * fitScale) / 2;
+    this.offsetY = (containerHeight - this.imgHeight * fitScale) / 2;
+    
     this.render();
   }
   
@@ -163,35 +186,8 @@ class CanvasManager {
     this.imageData = imageData;
     this.imgWidth = imageData.width;
     this.imgHeight = imageData.height;
-    
-    // Ajustar canvas al contenedor manteniendo proporcion
-    const container = this.canvas.parentElement;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    
-    const imgAspect = this.imgWidth / this.imgHeight;
-    const containerAspect = containerWidth / containerHeight;
-    
-    if (imgAspect > containerAspect) {
-      this.canvas.width = containerWidth;
-      this.canvas.height = containerWidth / imgAspect;
-    } else {
-      this.canvas.height = containerHeight;
-      this.canvas.width = containerHeight * imgAspect;
-    }
-    
-    // Calcular escala inicial para que la imagen quepa
-    const fitScale = Math.min(
-      this.canvas.width / this.imgWidth,
-      this.canvas.height / this.imgHeight
-    );
-    
-    this.scale = fitScale;
-    this.offsetX = (this.canvas.width - this.imgWidth * fitScale) / 2;
-    this.offsetY = (this.canvas.height - this.imgHeight * fitScale) / 2;
-    
-    this.render();
-    logger.info(`Canvas ajustado: ${this.canvas.width}x${this.canvas.height}, escala inicial: ${fitScale.toFixed(3)}`);
+    this.fitToContainer();
+    logger.info(`Canvas: ${this.canvas.width}x${this.canvas.height}, Imagen: ${this.imgWidth}x${this.imgHeight}, Escala: ${this.scale.toFixed(3)}`);
   }
   
   addLayer(name, drawFn) { 
@@ -219,16 +215,7 @@ class CanvasManager {
   
   reset() {
     if (!this.imageData) return;
-    
-    const fitScale = Math.min(
-      this.canvas.width / this.imgWidth,
-      this.canvas.height / this.imgHeight
-    );
-    
-    this.scale = fitScale;
-    this.offsetX = (this.canvas.width - this.imgWidth * fitScale) / 2;
-    this.offsetY = (this.canvas.height - this.imgHeight * fitScale) / 2;
-    this.render();
+    this.fitToContainer();
     logger.info('Vista reseteada');
   }
   
@@ -244,10 +231,33 @@ class CanvasManager {
     this.zoomAt(centerX, centerY, 0.77);
   }
   
+  exportLayer(name) {
+    const layer = this.layers.get(name);
+    if (!layer) return;
+    
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = this.imgWidth;
+    exportCanvas.height = this.imgHeight;
+    const ctx = exportCanvas.getContext('2d');
+    
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    
+    layer.drawFn(ctx);
+    
+    exportCanvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name.replace(/\s+/g, '_')}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logger.info(`Exportado: ${name}.png`);
+    });
+  }
+  
   render() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    // Fondo
     this.ctx.fillStyle = '#000';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
@@ -255,7 +265,6 @@ class CanvasManager {
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
     
-    // Dibujar imagen
     if (this.imageData) {
       const temp = document.createElement('canvas');
       temp.width = this.imgWidth;
@@ -264,8 +273,7 @@ class CanvasManager {
       this.ctx.drawImage(temp, 0, 0);
     }
     
-    // Dibujar capas (lineas de algoritmos)
-    this.layers.forEach((layer, name) => {
+    this.layers.forEach((layer) => {
       if (layer.visible) {
         layer.drawFn(this.ctx);
       }
@@ -273,7 +281,6 @@ class CanvasManager {
     
     this.ctx.restore();
     
-    // Dibujar info de zoom
     this.ctx.fillStyle = 'rgba(0,0,0,0.7)';
     this.ctx.fillRect(5, 5, 150, 25);
     this.ctx.fillStyle = '#4CAF50';

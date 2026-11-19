@@ -51,11 +51,11 @@
     </div>
 
     <div class="panel">
-        <h3>⚙️ Algoritmos</h3>
+        <h3>⚙️ Algoritmos (9 disponibles)</h3>
         <div class="checkbox-item">
             <input type="checkbox" id="algo_hough" value="Hough Transform">
             <span class="color-dot" style="background:#FF0000;"></span>
-            <label for="algo_hough">Hough Transform (lento)</label>
+            <label for="algo_hough">Hough Transform</label>
         </div>
         <div class="checkbox-item">
             <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
@@ -70,7 +70,32 @@
         <div class="checkbox-item">
             <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
             <span class="color-dot" style="background:#800080;"></span>
-            <label for="algo_radar">Radar Matcher (kernel en cruz)</label>
+            <label for="algo_radar">Radar Matcher</label>
+        </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_lsd" value="LSD">
+            <span class="color-dot" style="background:#00FF00;"></span>
+            <label for="algo_lsd">LSD</label>
+        </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_gabor" value="Gabor Filters">
+            <span class="color-dot" style="background:#FF00FF;"></span>
+            <label for="algo_gabor">Gabor Filters</label>
+        </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_frangi" value="Frangi Filter">
+            <span class="color-dot" style="background:#00FFFF;"></span>
+            <label for="algo_frangi">Frangi Filter</label>
+        </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_fourier" value="Fourier Analysis">
+            <span class="color-dot" style="background:#FFA500;"></span>
+            <label for="algo_fourier">Fourier Analysis</label>
+        </div>
+        <div class="checkbox-item">
+            <input type="checkbox" id="algo_cfar" value="CFAR Detector">
+            <span class="color-dot" style="background:#FFC0CB;"></span>
+            <label for="algo_cfar">CFAR Detector</label>
         </div>
         <br>
         <button onclick="selectAll()">✅ Todos</button>
@@ -97,9 +122,13 @@
     <script src="js/algorithms/profile-projection.js"></script>
     <script src="js/algorithms/morphological.js"></script>
     <script src="js/algorithms/radar-matcher.js"></script>
-    <script src="js/algorithms/radar-matcher.js"></script>
+    <script src="js/algorithms/lsd.js"></script>
+    <script src="js/algorithms/gabor.js"></script>
+    <script src="js/algorithms/frangi.js"></script>
+    <script src="js/algorithms/fourier.js"></script>
+    <script src="js/algorithms/cfar.js"></script>
     <script src="js/runner.js"></script>
-    <script src="js/diagnosis/intelligent-selector.js"></script>
+    <script src="js/diagnosis/adaptive-diagnosis.js"></script>
 
     <script>
         let canvasManager, runner, selector, currentImageData = null;
@@ -112,16 +141,20 @@
             try {
                 canvasManager = new CanvasManager('mainCanvas');
                 runner = new AlgorithmRunner();
-                selector = new IntelligentSelector();
+                selector = new AdaptiveDiagnosis();
 
                 runner.registerAlgorithm(new HoughTransform());
                 runner.registerAlgorithm(new ProfileProjection());
                 runner.registerAlgorithm(new Morphological());
                 runner.registerAlgorithm(new RadarMatcher());
-                runner.registerAlgorithm(new RadarMatcher());
+                runner.registerAlgorithm(new LSD());
+                runner.registerAlgorithm(new GaborFilters());
+                runner.registerAlgorithm(new FrangiFilter());
+                runner.registerAlgorithm(new FourierAnalysis());
+                runner.registerAlgorithm(new CFARDetector());
 
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-                logger.info("Aplicacion lista. 4 algoritmos registrados.");
+                logger.info("Aplicacion lista. 9 algoritmos registrados.");
             } catch (e) {
                 alert("ERROR: " + e.message);
                 logger.error(e.message);
@@ -152,8 +185,7 @@
                     ctx.drawImage(img, 0, 0);
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-                    // RESET del analisis de imagen anterior (bug 2)
-                    selector.imageAnalysis = null;
+                    selector.history = [];
                     algorithmResults = [];
                     canvasManager.clearLayers();
                     document.getElementById('layerControls').innerHTML = '';
@@ -225,7 +257,6 @@
 
             if (algorithmResults.length > 0 && !cancelRequested) {
                 try {
-                    // FIX bug 1: pasar imageData como segundo argumento
                     const diagnosis = selector.analyze(algorithmResults, currentImageData);
                     showDiagnosis(diagnosis);
                     updateLayerControls();
@@ -248,12 +279,8 @@
                 html += '<br><br><strong>Ranking:</strong><br>';
                 html += diagnosis.ranking.map((r, i) =>
                     (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) +
-                    ' (' + r.details.totalLines + ' lineas)'
+                    ' (' + r.metrics.totalLines + ' lineas)'
                 ).join('<br>');
-            }
-
-            if (diagnosis.isLikelyTable === false) {
-                html += '<br><br><strong style="color:#ff9800;">⚠️ Esta imagen podria no ser una tabla.</strong>';
             }
 
             box.innerHTML = html;
@@ -272,6 +299,16 @@
                 toggle.className = 'layer-toggle';
                 toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' +
                                    result.algorithm + ': ' + result.metrics.totalLines;
+                
+                const exportBtn = document.createElement('button');
+                exportBtn.textContent = '💾';
+                exportBtn.style.cssText = 'margin-left:10px;padding:4px 8px;font-size:12px;background:#2196F3;';
+                exportBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    canvasManager.exportLayer(result.algorithm);
+                };
+                toggle.appendChild(exportBtn);
+                
                 toggle.onclick = () => {
                     canvasManager.toggleLayer(result.algorithm);
                     toggle.classList.toggle('inactive');
