@@ -1,432 +1,445 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Detectores de Tablas</title>
-    <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; margin: 0; }
-        .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-        h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
-        h3 { color: #4CAF50; margin-top: 0; }
-        button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; cursor: pointer; font-size: 14px; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        .btn-secondary { background: #2196F3; }
-        .btn-danger { background: #f44336; }
-        .btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
-        #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
-        #mainCanvas { display: block; touch-action: none; }
-        .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
-        .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
-        .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
-        .checkbox-item { margin: 8px 0; padding: 10px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
-        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
-        .checkbox-item label { cursor: pointer; flex: 1; }
-        .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-        #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
-        .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
-        .layer-toggle.inactive { opacity: 0.35; }
-        #diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; }
-        #analysisBox { background: #1e3a5f; border-left: 4px solid #2196F3; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Detectores de Tablas</title>
+<style>
+body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; margin: 0; }
+.panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
+h3 { color: #4CAF50; margin-top: 0; }
+button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; cursor: pointer; font-size: 14px; }
+button:hover { background: #45a049; }
+button:disabled { background: #555; cursor: not-allowed; }
+.btn-secondary { background: #2196F3; }
+.btn-secondary:hover { background: #0b7dda; }
+.btn-danger { background: #f44336; }
+.btn-danger:hover { background: #da190b; }
+.btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
+.btn-optimize:hover { background: #e68900; }
+#canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; border-radius: 4px; }
+#mainCanvas { display: block; touch-action: none; }
+.canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
+.canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
+.log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; border: 1px solid #333; }
+.checkbox-item { margin: 8px 0; padding: 10px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
+.checkbox-item div { display: flex; align-items: center; gap: 10px; flex: 1; }
+.checkbox-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+.checkbox-item label { cursor: pointer; flex: 1; }
+.color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; vertical-align: middle; }
+#statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; border-left: 4px solid #4CAF50; }
+.layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
+.layer-toggle.inactive { opacity: 0.35; }
+#diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; display: none; }
+#analysisBox { background: #1e3a5f; border-left: 4px solid #2196F3; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; line-height: 1.5; display: none; }
+#imgInfo { margin-left: 10px; color: #999; font-size: 13px; }
+</style>
 </head>
 <body>
-    <h2>🔍 Detectores de Tablas</h2>
-    <div class="panel">
-        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
-        <input type="file" id="imageInput" accept="image/*" style="display: none;">
-        <span id="imgInfo" style="margin-left:10px; color:#999;"></span>
-    </div>
-    <div class="panel" id="vizPanel">
-        <h3>🎨 Visualización (pellizca para zoom)</h3>
-        <div id="canvasContainer">
-            <canvas id="mainCanvas"></canvas>
-            <div class="canvas-controls">
-                <button onclick="canvasManager.zoomIn()">➕</button>
-                <button onclick="canvasManager.zoomOut()">➖</button>
-                <button onclick="canvasManager.reset()">🔄</button>
-            </div>
-        </div>
-        <div id="layerControls"></div>
-    </div>
-    <div class="panel">
-        <h3>⚙️ Algoritmos (6 disponibles)</h3>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
-                <span class="color-dot" style="background:#FFFF00;"></span>
-                <label for="algo_profile">Profile Projection</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('profile')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_morph" value="Morphological" checked>
-                <span class="color-dot" style="background:#808080;"></span>
-                <label for="algo_morph">Morphological</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('morph')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_radar" value="Cell Detector" checked>
-                <span class="color-dot" style="background:#800080;"></span>
-                <label for="algo_radar">Cell Detector</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('radar')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_echo" value="Echo Radar" checked>
-                <span class="color-dot" style="background:#00BFFF;"></span>
-                <label for="algo_echo">Echo Radar</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('echo')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-                <span class="color-dot" style="background:#FF1493;"></span>
-                <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('lattice')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-                <input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked>
-                <span class="color-dot" style="background:#FFA500;"></span>
-                <label for="algo_fourier">Fourier Analysis</label>
-            </div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
-        </div>
-        <br>
-        <button onclick="selectAll()">✅ Todos</button>
-        <button onclick="deselectAll()">❌ Ninguno</button>
-        <button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
-        <br><br>
-        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
-        <button onclick="optimizeSelected()" class="btn-secondary">🔧 Optimizar seleccionados</button>
-        <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
-        <div id="statusIndicator"></div>
-        <div id="analysisBox" style="display:none;"></div>
-        <div id="diagnosisBox" style="display:none;"></div>
-    </div>
-    <div class="panel">
-        <h3>📝 Log</h3>
-        <button class="btn-secondary" onclick="copyLog()">📋 Copiar Log</button>
-        <button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar Log</button>
-        <div class="log-container" id="logContainer"></div>
-    </div>
-    <script src="js/utils/logger.js"></script>
-    <script src="js/utils/image-processor.js"></script>
-    <script src="js/utils/preprocessor.js"></script>
-    <script src="js/utils/line-validator.js"></script>
-    <script src="js/utils/text-remover.js"></script>
-    <script src="js/visualization/canvas-manager.js"></script>
-    <script src="js/algorithms/profile-projection.js"></script>
-    <script src="js/algorithms/morphological.js"></script>
-    <script src="js/algorithms/radar-matcher.js"></script>
-    <script src="js/algorithms/echo-radar.js"></script>
-    <script src="js/algorithms/lattice-radar.js"></script>
-    <script src="js/algorithms/fourier.js"></script>
-    <script src="js/runner.js"></script>
-    <script src="js/diagnosis/adaptive-diagnosis.js"></script>
-    <script src="js/diagnosis/smart-analyzer.js"></script>
-    <script>
-        let canvasManager, runner, selector, smartAnalyzer, currentImageData = null;
-        let isRunning = false, cancelRequested = false, algorithmResults = [];
-        let algorithmInstances = {}, currentImageProfile = null;
-        // Sistema de auto-aprendizaje con localStorage
-        const LearningSystem = {
-            storageKey: "tableDetector_learning",
-            
-            saveResult(imageType, parameters, score, linesDetected) {
-                try {
-                    const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
-                    if (!data[imageType]) data[imageType] = [];
-                    data[imageType].push({
-                        parameters: parameters,
-                        score: score,
-                        linesDetected: linesDetected,
-                        timestamp: Date.now()
-                    });
-                    if (data[imageType].length > 10) data[imageType] = data[imageType].slice(-10);
-                    localStorage.setItem(this.storageKey, JSON.stringify(data));
-                    logger.info("  Aprendizaje: resultado guardado (score: " + score.toFixed(3) + ")");
-                } catch(e) { logger.error("Error guardando aprendizaje: " + e); }
-            },
-            
-            getBestParameters(imageType) {
-                try {
-                    const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
-                    if (!data[imageType] || data[imageType].length === 0) return null;
-                    const best = data[imageType].reduce((a, b) => a.score > b.score ? a : b);
-                    logger.info("  Aprendizaje: usando parámetros óptimos de " + imageType + " (score: " + best.score.toFixed(3) + ")");
-                    return best.parameters;
-                } catch(e) { return null; }
-            },
-            
-            applyLearnedParameters(imageType) {
-                const params = this.getBestParameters(imageType);
-                if (!params) return false;
-                
-                Object.entries(params).forEach(([algoName, algoParams]) => {
-                    const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
-                    if (algo) {
-                        Object.entries(algoParams).forEach(([key, value]) => {
-                            if (algo[key] !== undefined) algo[key] = value;
-                        });
-                    }
+<h2>🔍 Detectores de Tablas</h2>
+<div class="panel">
+<button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
+<input type="file" id="imageInput" accept="image/*" style="display: none;">
+<span id="imgInfo"></span>
+</div>
+<div class="panel" id="vizPanel">
+<h3>🎨 Visualización (pellizca para zoom)</h3>
+<div id="canvasContainer">
+<canvas id="mainCanvas"></canvas>
+<div class="canvas-controls">
+<button onclick="canvasManager.zoomIn()">➕</button>
+<button onclick="canvasManager.zoomOut()">➖</button>
+<button onclick="canvasManager.reset()">🔄</button>
+</div>
+</div>
+<div id="layerControls"></div>
+</div>
+<div class="panel">
+<h3>⚙️ Algoritmos (6 disponibles)</h3>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_profile" value="Profile Projection" checked>
+<span class="color-dot" style="background:#FFFF00;"></span>
+<label for="algo_profile">Profile Projection</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('profile')">🔧 Optimizar</button>
+</div>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_morph" value="Morphological" checked>
+<span class="color-dot" style="background:#808080;"></span>
+<label for="algo_morph">Morphological</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('morph')">🔧 Optimizar</button>
+</div>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_radar" value="Cell Detector" checked>
+<span class="color-dot" style="background:#800080;"></span>
+<label for="algo_radar">Cell Detector</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('radar')">🔧 Optimizar</button>
+</div>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_echo" value="Echo Radar" checked>
+<span class="color-dot" style="background:#00BFFF;"></span>
+<label for="algo_echo">Echo Radar</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('echo')">🔧 Optimizar</button>
+</div>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
+<span class="color-dot" style="background:#FF1493;"></span>
+<label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('lattice')">🔧 Optimizar</button>
+</div>
+<div class="checkbox-item">
+<div>
+<input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked>
+<span class="color-dot" style="background:#FFA500;"></span>
+<label for="algo_fourier">Fourier Analysis</label>
+</div>
+<button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
+</div>
+<br>
+<button onclick="selectAll()">✅ Todos</button>
+<button onclick="deselectAll()">❌ Ninguno</button>
+<button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
+<br><br>
+<button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+<button onclick="optimizeSelected()" class="btn-secondary">🔧 Optimizar seleccionados</button>
+<button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
+<div id="statusIndicator"></div>
+<div id="analysisBox"></div>
+<div id="diagnosisBox"></div>
+</div>
+<div class="panel">
+<h3>📝 Log</h3>
+<button class="btn-secondary" onclick="copyLog()">📋 Copiar Log</button>
+<button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar Log</button>
+<div class="log-container" id="logContainer"></div>
+</div>
+<script src="js/utils/logger.js"></script>
+<script src="js/utils/image-processor.js"></script>
+<script src="js/utils/preprocessor.js"></script>
+<script src="js/utils/line-validator.js"></script>
+<script src="js/utils/text-remover.js"></script>
+<script src="js/visualization/canvas-manager.js"></script>
+<script src="js/algorithms/profile-projection.js"></script>
+<script src="js/algorithms/morphological.js"></script>
+<script src="js/algorithms/radar-matcher.js"></script>
+<script src="js/algorithms/echo-radar.js"></script>
+<script src="js/algorithms/lattice-radar.js"></script>
+<script src="js/algorithms/fourier.js"></script>
+<script src="js/runner.js"></script>
+<script src="js/diagnosis/adaptive-diagnosis.js"></script>
+<script src="js/diagnosis/smart-analyzer.js"></script>
+<script>
+const LearningSystem = {
+    storageKey: "tableDetector_learning",
+    saveResult(imageType, parameters, score, linesDetected) {
+        try {
+            const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
+            if (!data[imageType]) data[imageType] = [];
+            data[imageType].push({ parameters: parameters, score: score, linesDetected: linesDetected, timestamp: Date.now() });
+            if (data[imageType].length > 10) data[imageType] = data[imageType].slice(-10);
+            localStorage.setItem(this.storageKey, JSON.stringify(data));
+            logger.info("  Aprendizaje: resultado guardado (score: " + score.toFixed(3) + ")");
+        } catch(e) { logger.error("Error guardando aprendizaje: " + e); }
+    },
+    getBestParameters(imageType) {
+        try {
+            const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
+            if (!data[imageType] || data[imageType].length === 0) return null;
+            const best = data[imageType].reduce((a, b) => a.score > b.score ? a : b);
+            logger.info("  Aprendizaje: usando parámetros óptimos de " + imageType + " (score: " + best.score.toFixed(3) + ")");
+            return best.parameters;
+        } catch(e) { return null; }
+    },
+    applyLearnedParameters(imageType) {
+        const params = this.getBestParameters(imageType);
+        if (!params) return false;
+        Object.entries(params).forEach(([algoName, algoParams]) => {
+            const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
+            if (algo) {
+                Object.entries(algoParams).forEach(([key, value]) => {
+                    if (algo[key] !== undefined) algo[key] = value;
                 });
-                return true;
             }
+        });
+        return true;
+    }
+};
+let canvasManager, runner, selector, smartAnalyzer, currentImageData = null;
+let isRunning = false;
+let cancelRequested = false;
+let algorithmResults = [];
+let algorithmInstances = {};
+let currentImageProfile = null;
+function initApp() {
+    logger.info("Iniciando aplicacion...");
+    try {
+        canvasManager = new CanvasManager('mainCanvas');
+        runner = new AlgorithmRunner();
+        selector = new AdaptiveDiagnosis();
+        smartAnalyzer = new SmartAnalyzer();
+        algorithmInstances = {
+            profile: new ProfileProjection(),
+            morph: new Morphological(),
+            radar: new RadarMatcher(),
+            echo: new EchoRadar(),
+            lattice: new LatticeRadar(),
+            fourier: new FourierAnalysis()
         };
-
-        function initApp() {
-            logger.info("Iniciando aplicacion...");
-            try {
-                canvasManager = new CanvasManager('mainCanvas');
-                runner = new AlgorithmRunner();
-                selector = new AdaptiveDiagnosis();
-                smartAnalyzer = new SmartAnalyzer();
-                algorithmInstances = {
-                    profile: new ProfileProjection(),
-                    morph: new Morphological(),
-                    radar: new RadarMatcher(),
-                    echo: new EchoRadar(),
-                    lattice: new LatticeRadar(),
-                    fourier: new FourierAnalysis()
-                };
-                Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
-                document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-                logger.info("Aplicacion lista. 6 algoritmos registrados.");
-            } catch (e) { alert("ERROR: " + e.message); logger.error(e.message); }
-        }
-        function applySmartSelection() {
-            if (!currentImageData) { alert("Primero carga una imagen"); return; }
-            logger.info('=== ANÁLISIS INTELIGENTE DE IMAGEN ===');
-            currentImageProfile = smartAnalyzer.analyzeImage(currentImageData);
-            const suggestions = smartAnalyzer.getRecommendation();
-            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
-            const allAlgos = Object.values(algorithmInstances);
-            suggestions.primary.forEach(name => {
-                const algo = allAlgos.find(a => a.name === name);
-                if (algo) { const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo); if (key) document.getElementById('algo_' + key).checked = true; }
-            });
-            suggestions.secondary.forEach(name => {
-                const algo = allAlgos.find(a => a.name === name);
-                if (algo) { const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo); if (key) document.getElementById('algo_' + key).checked = true; }
-            });
-            Object.entries(suggestions.params).forEach(([algoName, params]) => {
-                if (algoName === 'deskew') return;
-                const algo = allAlgos.find(a => a.name === algoName);
-                if (algo) { Object.entries(params).forEach(([param, value]) => { if (algo[param] !== undefined) { algo[param] = value; logger.info('  ' + algoName + '.' + param + ' = ' + value); } }); }
-            });
-            showAnalysis(currentImageProfile, suggestions);
-            logger.info('Selección inteligente aplicada');
-        }
-        function showAnalysis(profile, suggestions) {
-            const box = document.getElementById('analysisBox');
-            let html = '<strong style="color:#2196F3;">🧠 ANÁLISIS DE IMAGEN</strong><br>';
-            html += '<strong>Tipo:</strong> ' + profile.imageType + '<br>';
-            html += '<strong>Brillo:</strong> ' + profile.meanGray + (profile.isDark ? ' (oscura)' : ' (clara)') + '<br>';
-            html += '<strong>Densidad bordes:</strong> ' + profile.edgeDensity + '%<br>';
-            html += '<strong>Líneas detectadas:</strong> ' + profile.hPeaks + 'H / ' + profile.vPeaks + 'V<br>';
-            html += '<strong>Grosor promedio:</strong> ' + profile.avgLineThickness + 'px<br>';
-            if (suggestions.primary.length > 0) { html += '<br><strong>🎯 Algoritmos recomendados:</strong><br>'; html += suggestions.primary.map(a => '• ' + a).join('<br>'); }
-            box.innerHTML = html; box.style.display = 'block';
-        }
-        function optimizeAlgorithm(algoKey) {
-            if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
-            const result = algorithmResults.find(r => r.algorithm === algorithmInstances[algoKey].name);
-            if (!result) { alert("No hay resultados de " + algorithmInstances[algoKey].name); return; }
-            logger.info("Optimizando " + algorithmInstances[algoKey].name + "...");
-            const lines = result.metrics.totalLines;
-            if (algoKey === 'fourier') {
-                if (lines > 150) { algorithmInstances[algoKey].setMinDistance(20); logger.info("Fourier: aumentando minDistance a 20"); }
-                else if (lines < 50) { algorithmInstances[algoKey].setMinDistance(10); logger.info("Fourier: reduciendo minDistance a 10"); }
-            } else if (algoKey === 'echo') {
-                if (lines < 30) { lineValidator.minCoverage = Math.max(0.3, lineValidator.minCoverage - 0.05); lineValidator.minRunRatio = Math.max(0.3, lineValidator.minRunRatio - 0.05); logger.info("Echo Radar: relajando umbrales"); }
-            }
-            alert("Parámetros ajustados. Ejecuta de nuevo.");
-        }
-        function selectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true); logger.info("Todos seleccionados"); }
-        function deselectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false); logger.info("Todos deseleccionados"); }
-        function handleImageLoad(event) {
-            alert("PASO 1: Función handleImageLoad iniciada");
-            const file = event.target.files[0];
-            if (!file) { alert("No se seleccionó archivo"); return; }
-            alert("PASO 2: Archivo encontrado: " + file.name); if (!file) return;
-            logger.info("Cargando: " + file.name);
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
-                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
-                    currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    lineValidator.invalidate();
-                    if (typeof preprocessor !== 'undefined' && preprocessor.clearCache) preprocessor.clearCache();
-                    selector.history = []; algorithmResults = []; currentImageProfile = null;
-                    canvasManager.clearLayers(); document.getElementById('layerControls').innerHTML = '';
-                    document.getElementById('diagnosisBox').style.display = 'none'; document.getElementById('analysisBox').style.display = 'none';
-                    // Aplicar parámetros aprendidos si existen
-                    const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : null;
-                    if (imageType) {
-                        const applied = LearningSystem.applyLearnedParameters(imageType);
-                        if (applied) logger.info("Parámetros aprendidos aplicados para " + imageType);
-                    }
-
-                    setTimeout(() => { canvasManager.loadImage(currentImageData); document.getElementById('runButton').disabled = false; document.getElementById('imgInfo').textContent = img.width + 'x' + img.height; logger.info("Imagen cargada: " + img.width + "x" + img.height); }, 100);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-        async function runAlgorithms() {
-            if (!currentImageData || isRunning) return;
-            const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
-            if (selected.length === 0) { logger.error("No hay algoritmos seleccionados"); return; }
-            isRunning = true; cancelRequested = false; algorithmResults = [];
-            canvasManager.clearLayers(); document.getElementById('layerControls').innerHTML = '';
+        Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
+        document.getElementById('imageInput').addEventListener('change', handleImageLoad);
+        logger.info("Aplicacion lista. 6 algoritmos registrados.");
+    } catch (e) {
+        alert("ERROR al inicializar: " + e.message);
+        logger.error("Error: " + e.message);
+    }
+}
+function handleImageLoad(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    logger.info("Cargando: " + file.name);
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            lineValidator.invalidate();
+            if (typeof preprocessor !== 'undefined' && preprocessor.clearCache) preprocessor.clearCache();
+            selector.history = [];
+            algorithmResults = [];
+            currentImageProfile = null;
+            canvasManager.clearLayers();
+            document.getElementById('layerControls').innerHTML = '';
             document.getElementById('diagnosisBox').style.display = 'none';
-            document.getElementById('runButton').disabled = true; document.getElementById('cancelButton').style.display = 'inline-block';
-            logger.info("Algoritmos a ejecutar: " + selected.join(", "));
-            for (let i = 0; i < selected.length; i++) {
-                if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
-                const algoName = selected[i];
-                showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
-                await new Promise(r => setTimeout(r, 30));
-                try {
-                    const result = await runner.runAlgorithm(algoName, currentImageData);
-                    algorithmResults.push(result);
-                    canvasManager.addLayer(result.algorithm, (ctx) => {
-                        ctx.strokeStyle = result.color; ctx.lineWidth = 2;
-                        result.lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke(); });
-                    });
-                    logger.info(result.algorithm + ": " + result.metrics.totalLines + " lineas en " + result.metrics.executionTime + "ms");
-                } catch (e) { logger.error("Error en " + algoName + ": " + e.message); }
-                await new Promise(r => setTimeout(r, 0));
+            document.getElementById('analysisBox').style.display = 'none';
+            const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : null;
+            if (imageType) {
+                const applied = LearningSystem.applyLearnedParameters(imageType);
+                if (applied) logger.info("Parámetros aprendidos aplicados para " + imageType);
             }
-            hideStatus();
-            if (algorithmResults.length > 0 && !cancelRequested) {
-                try { const diagnosis = selector.analyze(algorithmResults, currentImageData); showDiagnosis(diagnosis); updateLayerControls(); }
-                    
-                    // Auto-aprendizaje: guardar resultado
-                    const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : "UNKNOWN";
-                    const currentParams = {};
-                    Object.values(algorithmInstances).forEach(algo => {
-                        currentParams[algo.name] = {};
-                        ["minCoverage", "minRunRatio", "gapTolerance", "minDistance", "minCellWidth", "minCellHeight"].forEach(key => {
-                            if (algo[key] !== undefined) currentParams[algo.name][key] = algo[key];
-                        });
-                    });
-                    LearningSystem.saveResult(imageType, currentParams, diagnosis.ranking[0].score, diagnosis.ranking[0].metrics.totalLines);
-                    
-                    // Auto-optimización si el score es bajo
-                    if (diagnosis.ranking[0].score < 0.7 && !window._autoOptimized) {
-                        logger.info("Score bajo (" + diagnosis.ranking[0].score.toFixed(3) + "), auto-optimizando...");
-                        window._autoOptimized = true;
-                        setTimeout(() => {
-                            optimizeSelected();
-                            setTimeout(() => {
-                                window._autoOptimized = false;
-                                runAlgorithms();
-                            }, 100);
-                        }, 500);
-                    }
-
-                catch (e) { logger.error("Error en diagnostico: " + e.message); }
-            }
-            isRunning = false; document.getElementById('runButton').disabled = false; document.getElementById('cancelButton').style.display = 'none';
+            setTimeout(() => {
+                canvasManager.loadImage(currentImageData);
+                document.getElementById('runButton').disabled = false;
+                document.getElementById('imgInfo').textContent = img.width + 'x' + img.height;
+                logger.info("Imagen cargada: " + img.width + "x" + img.height);
+            }, 100);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+function applySmartSelection() {
+    if (!currentImageData) { alert("Primero carga una imagen"); return; }
+    logger.info('=== ANÁLISIS INTELIGENTE DE IMAGEN ===');
+    currentImageProfile = smartAnalyzer.analyzeImage(currentImageData);
+    const suggestions = smartAnalyzer.getRecommendation();
+    document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
+    const allAlgos = Object.values(algorithmInstances);
+    suggestions.primary.forEach(name => {
+        const algo = allAlgos.find(a => a.name === name);
+        if (algo) {
+            const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
+            if (key) document.getElementById('algo_' + key).checked = true;
         }
-        function showDiagnosis(diagnosis) {
-            const box = document.getElementById('diagnosisBox');
-            let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
-            html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
-            if (diagnosis.ranking && diagnosis.ranking.length > 1) {
-                html += '<br><br><strong>Ranking:</strong><br>';
-                html += diagnosis.ranking.map((r, i) => (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) + ' (' + r.metrics.totalLines + ' lineas)').join('<br>');
-            }
-            box.innerHTML = html; box.style.display = 'block';
-            logger.info("Mejor algoritmo: " + diagnosis.best); diagnosis.reasons.forEach(r => logger.info("  " + r));
+    });
+    suggestions.secondary.forEach(name => {
+        const algo = allAlgos.find(a => a.name === name);
+        if (algo) {
+            const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
+            if (key) document.getElementById('algo_' + key).checked = true;
         }
-        function updateLayerControls() {
-            const container = document.getElementById('layerControls');
-            container.innerHTML = '<strong>Capas (toca para mostrar/ocultar):</strong><br>';
-            algorithmResults.forEach(result => {
-                const toggle = document.createElement('div'); toggle.className = 'layer-toggle';
-                toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' + result.algorithm + ': ' + result.metrics.totalLines;
-                const exportBtn = document.createElement('button'); exportBtn.textContent = '💾';
-                exportBtn.style.cssText = 'margin-left:10px;padding:4px 8px;font-size:12px;background:#2196F3;';
-                exportBtn.onclick = (e) => { e.stopPropagation(); canvasManager.exportLayer(result.algorithm); };
-                toggle.appendChild(exportBtn);
-                toggle.onclick = () => { canvasManager.toggleLayer(result.algorithm); toggle.classList.toggle('inactive'); };
-                container.appendChild(toggle);
-            });
-        }
-        // Sistema de auto-aprendizaje con localStorage
-
-        function optimizeSelected() {
-            if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
-            const selected = Array.from(document.querySelectorAll(".checkbox-item input[type="checkbox"]:checked")).map(cb => cb.value);
-            let adjusted = 0;
-            selected.forEach(algoName => {
-                const result = algorithmResults.find(r => r.algorithm === algoName);
-                if (!result) return;
-                const lines = result.metrics.totalLines;
-                const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
-                if (!algo) return;
-                
-                if (algoName === "Echo Radar" || algoName === "Lattice Radar") {
-                    if (lines < 30) {
-                        lineValidator.minCoverage = Math.max(0.25, lineValidator.minCoverage - 0.10);
-                        lineValidator.minRunRatio = Math.max(0.25, lineValidator.minRunRatio - 0.10);
-                        lineValidator.gapTolerance = Math.min(14, lineValidator.gapTolerance + 2);
-                        logger.info("  " + algoName + ": relajando umbrales de evidencia (pocas lineas)");
-                        adjusted++;
-                    } else if (lines > 150) {
-                        lineValidator.minCoverage = Math.min(0.75, lineValidator.minCoverage + 0.05);
-                        lineValidator.minRunRatio = Math.min(0.75, lineValidator.minRunRatio + 0.05);
-                        logger.info("  " + algoName + ": exigiendo mas evidencia (muchas lineas)");
-                        adjusted++;
-                    }
-                } else if (algoName === "Fourier Analysis") {
-                    if (lines > 150 && algo.setMinDistance) {
-                        algo.setMinDistance((algo.minDistance || 15) + 5);
-                        logger.info("  Fourier: aumentando minDistance a " + algo.minDistance);
-                        adjusted++;
-                    } else if (lines < 50 && algo.setMinDistance) {
-                        algo.setMinDistance(Math.max(6, (algo.minDistance || 15) - 4));
-                        logger.info("  Fourier: reduciendo minDistance a " + algo.minDistance);
-                        adjusted++;
-                    }
-                } else if (algoName === "Cell Detector") {
-                    if (lines < 20) {
-                        algo.minCellWidth = Math.max(15, (algo.minCellWidth || 20) - 3);
-                        algo.minCellHeight = Math.max(10, (algo.minCellHeight || 15) - 3);
-                        logger.info("  Cell Detector: reduciendo tamaño minimo de celda");
-                        adjusted++;
-                    }
+    });
+    Object.entries(suggestions.params).forEach(([algoName, params]) => {
+        if (algoName === 'deskew') return;
+        const algo = allAlgos.find(a => a.name === algoName);
+        if (algo) {
+            Object.entries(params).forEach(([param, value]) => {
+                if (algo[param] !== undefined) {
+                    algo[param] = value;
+                    logger.info('  ' + algoName + '.' + param + ' = ' + value);
                 }
             });
-            if (adjusted > 0) {
-                logger.info("Optimizacion completada: " + adjusted + " algoritmos ajustados. Ejecuta de nuevo.");
-                alert(adjusted + " algoritmos optimizados. Ejecuta de nuevo para ver mejoras.");
-            } else {
-                logger.info("No se requirieron ajustes");
-                alert("Los parametros ya estan optimizados");
-            }
         }
-
-        function cancelExecution() { cancelRequested = true; logger.info("Cancelacion solicitada..."); }
-        function showStatus(text) { const el = document.getElementById('statusIndicator'); el.textContent = text; el.style.display = 'block'; }
-        function hideStatus() { document.getElementById('statusIndicator').style.display = 'none'; }
-        function copyLog() { navigator.clipboard.writeText(logger.getLogsText()).then(() => alert("Log copiado")).catch(err => logger.error("Error: " + err)); }
-        function clearLog() { logger.logs = []; logger.startTime = Date.now(); updateLog(); }
-        function updateLog() { const container = document.getElementById('logContainer'); container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>'); container.scrollTop = container.scrollHeight; }
-        setInterval(updateLog, 500);
-        window.addEventListener("load", initApp);
-    </script>
+    });
+    showAnalysis(currentImageProfile, suggestions);
+    logger.info('Selección inteligente aplicada');
+}
+function showAnalysis(profile, suggestions) {
+    const box = document.getElementById('analysisBox');
+    let html = '<strong style="color:#2196F3;">🧠 ANÁLISIS DE IMAGEN</strong><br>';
+    html += '<strong>Tipo:</strong> ' + profile.imageType + '<br>';
+    html += '<strong>Brillo:</strong> ' + profile.meanGray + (profile.isDark ? ' (oscura)' : ' (clara)') + '<br>';
+    html += '<strong>Densidad bordes:</strong> ' + profile.edgeDensity + '%<br>';
+    html += '<strong>Líneas estimadas:</strong> ' + profile.hPeaks + 'H / ' + profile.vPeaks + 'V<br>';
+    html += '<strong>Grosor promedio:</strong> ' + profile.avgLineThickness + 'px<br>';
+    if (suggestions.primary.length > 0) {
+        html += '<br><strong>🎯 Algoritmos recomendados:</strong><br>';
+        html += suggestions.primary.map(a => '• ' + a).join('<br>');
+    }
+    box.innerHTML = html;
+    box.style.display = 'block';
+}
+function optimizeAlgorithm(algoKey) {
+    if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
+    const result = algorithmResults.find(r => r.algorithm === algorithmInstances[algoKey].name);
+    if (!result) { alert("No hay resultados de " + algorithmInstances[algoKey].name); return; }
+    logger.info("Optimizando " + algorithmInstances[algoKey].name + "...");
+    const lines = result.metrics.totalLines;
+    if (algoKey === 'fourier') {
+        if (lines > 150) { algorithmInstances[algoKey].setMinDistance(20); logger.info("Fourier: aumentando minDistance a 20"); }
+        else if (lines < 50) { algorithmInstances[algoKey].setMinDistance(10); logger.info("Fourier: reduciendo minDistance a 10"); }
+    } else if (algoKey === 'echo') {
+        if (lines < 30) { lineValidator.minCoverage = Math.max(0.3, lineValidator.minCoverage - 0.05); lineValidator.minRunRatio = Math.max(0.3, lineValidator.minRunRatio - 0.05); logger.info("Echo Radar: relajando umbrales"); }
+    } else if (algoKey === 'radar') {
+        if (lines < 20) { algorithmInstances[algoKey].minCellWidth = Math.max(15, algorithmInstances[algoKey].minCellWidth - 3); algorithmInstances[algoKey].minCellHeight = Math.max(10, algorithmInstances[algoKey].minCellHeight - 3); logger.info("Cell Detector: reduciendo tamaño mínimo"); }
+    }
+    alert("Parámetros ajustados. Ejecuta de nuevo.");
+}
+function optimizeSelected() {
+    if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
+    const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
+    let adjusted = 0;
+    selected.forEach(algoName => {
+        const result = algorithmResults.find(r => r.algorithm === algoName);
+        if (!result) return;
+        const lines = result.metrics.totalLines;
+        const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
+        if (!algo) return;
+        if (algoName === "Echo Radar" || algoName === "Lattice Radar") {
+            if (lines < 30) {
+                lineValidator.minCoverage = Math.max(0.25, lineValidator.minCoverage - 0.10);
+                lineValidator.minRunRatio = Math.max(0.25, lineValidator.minRunRatio - 0.10);
+                lineValidator.gapTolerance = Math.min(14, lineValidator.gapTolerance + 2);
+                logger.info("  " + algoName + ": relajando umbrales");
+                adjusted++;
+            } else if (lines > 150) {
+                lineValidator.minCoverage = Math.min(0.75, lineValidator.minCoverage + 0.05);
+                lineValidator.minRunRatio = Math.min(0.75, lineValidator.minRunRatio + 0.05);
+                logger.info("  " + algoName + ": exigiendo más evidencia");
+                adjusted++;
+            }
+        } else if (algoName === "Fourier Analysis") {
+            if (lines > 150 && algo.setMinDistance) { algo.setMinDistance((algo.minDistance || 15) + 5); logger.info("  Fourier: aumentando minDistance"); adjusted++; }
+            else if (lines < 50 && algo.setMinDistance) { algo.setMinDistance(Math.max(6, (algo.minDistance || 15) - 4)); logger.info("  Fourier: reduciendo minDistance"); adjusted++; }
+        } else if (algoName === "Cell Detector") {
+            if (lines < 20) { algo.minCellWidth = Math.max(15, (algo.minCellWidth || 20) - 3); algo.minCellHeight = Math.max(10, (algo.minCellHeight || 15) - 3); logger.info("  Cell Detector: reduciendo tamaño mínimo"); adjusted++; }
+        }
+    });
+    if (adjusted > 0) { logger.info("Optimización: " + adjusted + " algoritmos ajustados"); alert(adjusted + " algoritmos optimizados. Ejecuta de nuevo."); }
+    else { logger.info("No se requirieron ajustes"); alert("Los parámetros ya están optimizados"); }
+}
+function selectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true); logger.info("Todos seleccionados"); }
+function deselectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false); logger.info("Todos deseleccionados"); }
+async function runAlgorithms() {
+    if (!currentImageData || isRunning) return;
+    const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
+    if (selected.length === 0) { logger.error("No hay algoritmos seleccionados"); return; }
+    isRunning = true;
+    cancelRequested = false;
+    algorithmResults = [];
+    canvasManager.clearLayers();
+    document.getElementById('layerControls').innerHTML = '';
+    document.getElementById('diagnosisBox').style.display = 'none';
+    document.getElementById('runButton').disabled = true;
+    document.getElementById('cancelButton').style.display = 'inline-block';
+    logger.info("Algoritmos a ejecutar: " + selected.join(", "));
+    for (let i = 0; i < selected.length; i++) {
+        if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
+        const algoName = selected[i];
+        showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
+        await new Promise(r => setTimeout(r, 30));
+        try {
+            const result = await runner.runAlgorithm(algoName, currentImageData);
+            algorithmResults.push(result);
+            canvasManager.addLayer(result.algorithm, (ctx) => {
+                ctx.strokeStyle = result.color;
+                ctx.lineWidth = 2;
+                result.lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke(); });
+            });
+            logger.info(result.algorithm + ": " + result.metrics.totalLines + " lineas en " + result.metrics.executionTime + "ms");
+        } catch (e) { logger.error("Error en " + algoName + ": " + e.message); }
+        await new Promise(r => setTimeout(r, 0));
+    }
+    hideStatus();
+    if (algorithmResults.length > 0 && !cancelRequested) {
+        try {
+            const diagnosis = selector.analyze(algorithmResults, currentImageData);
+            showDiagnosis(diagnosis);
+            updateLayerControls();
+            const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : "UNKNOWN";
+            const currentParams = {};
+            Object.values(algorithmInstances).forEach(algo => {
+                currentParams[algo.name] = {};
+                ["minCoverage", "minRunRatio", "gapTolerance", "minDistance", "minCellWidth", "minCellHeight"].forEach(key => {
+                    if (algo[key] !== undefined) currentParams[algo.name][key] = algo[key];
+                });
+            });
+            LearningSystem.saveResult(imageType, currentParams, diagnosis.ranking[0].score, diagnosis.ranking[0].metrics.totalLines);
+            if (diagnosis.ranking[0].score < 0.7 && !window._autoOptimized) {
+                logger.info("Score bajo (" + diagnosis.ranking[0].score.toFixed(3) + "), auto-optimizando...");
+                window._autoOptimized = true;
+                setTimeout(() => {
+                    optimizeSelected();
+                    setTimeout(() => { window._autoOptimized = false; runAlgorithms(); }, 100);
+                }, 500);
+            }
+        } catch (e) { logger.error("Error en diagnostico: " + e.message); }
+    }
+    isRunning = false;
+    document.getElementById('runButton').disabled = false;
+    document.getElementById('cancelButton').style.display = 'none';
+}
+function showDiagnosis(diagnosis) {
+    const box = document.getElementById('diagnosisBox');
+    let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
+    html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
+    if (diagnosis.ranking && diagnosis.ranking.length > 1) {
+        html += '<br><br><strong>Ranking:</strong><br>';
+        html += diagnosis.ranking.map((r, i) => (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) + ' (' + r.metrics.totalLines + ' lineas)').join('<br>');
+    }
+    box.innerHTML = html;
+    box.style.display = 'block';
+    logger.info("Mejor algoritmo: " + diagnosis.best);
+    diagnosis.reasons.forEach(r => logger.info("  " + r));
+}
+function updateLayerControls() {
+    const container = document.getElementById('layerControls');
+    container.innerHTML = '<strong>Capas (toca para mostrar/ocultar):</strong><br>';
+    algorithmResults.forEach(result => {
+        const toggle = document.createElement('div');
+        toggle.className = 'layer-toggle';
+        toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' + result.algorithm + ': ' + result.metrics.totalLines;
+        const exportBtn = document.createElement('button');
+        exportBtn.textContent = '💾';
+        exportBtn.style.cssText = 'margin-left:10px;padding:4px 8px;font-size:12px;background:#2196F3;';
+        exportBtn.onclick = (e) => { e.stopPropagation(); canvasManager.exportLayer(result.algorithm); };
+        toggle.appendChild(exportBtn);
+        toggle.onclick = () => { canvasManager.toggleLayer(result.algorithm); toggle.classList.toggle('inactive'); };
+        container.appendChild(toggle);
+    });
+}
+function cancelExecution() { cancelRequested = true; logger.info("Cancelacion solicitada..."); }
+function showStatus(text) { const el = document.getElementById('statusIndicator'); el.textContent = text; el.style.display = 'block'; }
+function hideStatus() { document.getElementById('statusIndicator').style.display = 'none'; }
+function copyLog() { navigator.clipboard.writeText(logger.getLogsText()).then(() => alert("Log copiado")).catch(err => logger.error("Error: " + err)); }
+function clearLog() { logger.logs = []; logger.startTime = Date.now(); updateLog(); }
+function updateLog() { const container = document.getElementById('logContainer'); container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>'); container.scrollTop = container.scrollHeight; }
+setInterval(updateLog, 500);
+window.addEventListener("load", initApp);
+</script>
 </body>
 </html>
