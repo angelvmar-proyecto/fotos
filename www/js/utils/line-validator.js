@@ -1,18 +1,18 @@
 class LineValidator {
   constructor() {
-    // Umbrales para HORIZONTALES (se mantienen estrictos, funcionan bien)
+    // Umbrales para HORIZONTALES (estrictos, funcionan bien)
     this.hMinCoverage = 0.50;
     this.hMinRunRatio = 0.55;
     this.hMinSegRatio = 0.60;
     this.hGapTolerance = 4;
     this.hMinConsecutiveSegments = 3;
     
-    // Umbrales para VERTICALES (relajados para capturar líneas tenues)
-    this.vMinCoverage = 0.25;      // Antes: 0.30
-    this.vMinRunRatio = 0.20;      // Antes: 0.25
-    this.vMinSegRatio = 0.33;      // Antes: 0.40 (4 de 12 segmentos)
-    this.vGapTolerance = 12;       // Antes: 8px (tolera huecos de texto)
-    this.vMinConsecutiveSegments = 3; // NUEVO: filtro anti-fantasmas
+    // Umbrales para VERTICALES (ajustados al punto medio)
+    this.vMinCoverage = 0.35;      // Antes: 0.25 (muy bajo)
+    this.vMinRunRatio = 0.28;      // Antes: 0.20 (muy bajo)
+    this.vMinSegRatio = 0.42;      // Antes: 0.33 (muy bajo)
+    this.vGapTolerance = 10;       // Antes: 12 (muy alto)
+    this.vMinConsecutiveSegments = 4; // Antes: 3 (muy permisivo)
     
     this.segments = 12;
     this.segMin = 0.35;
@@ -108,7 +108,7 @@ class LineValidator {
     let ok = 0;
     for (let s = 0; s < S; s++) if (segLen[s] > 0 && segHit[s] / segLen[s] >= this.segMin) ok++;
     
-    // NUEVO: calcular segmentos consecutivos con evidencia (anti-fantasmas)
+    // Filtro de continuidad (anti-fantasmas)
     let maxConsecutive = 0, currentConsecutive = 0;
     for (let s = 0; s < S; s++) {
       if (segLen[s] > 0 && segHit[s] / segLen[s] >= this.segMin) {
@@ -158,17 +158,15 @@ class LineValidator {
 
   passes(m) {
     if (m.isHorizontal) {
-      // Horizontales: umbrales estrictos (sin cambios)
       return m.coverage >= this.hMinCoverage &&
              m.runRatio >= this.hMinRunRatio &&
              m.segRatio >= this.hMinSegRatio &&
              m.consecutive >= this.hMinConsecutiveSegments;
     } else {
-      // Verticales: umbrales relajados + filtro de continuidad
       return m.coverage >= this.vMinCoverage &&
              m.runRatio >= this.vMinRunRatio &&
              m.segRatio >= this.vMinSegRatio &&
-             m.consecutive >= this.vMinConsecutiveSegments; // NUEVO: anti-fantasmas
+             m.consecutive >= this.vMinConsecutiveSegments;
     }
   }
 
