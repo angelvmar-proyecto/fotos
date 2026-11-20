@@ -1,19 +1,11 @@
 class LineValidator {
   constructor() {
-    // Umbrales para HORIZONTALES (estrictos, funcionan bien)
-    this.hMinCoverage = 0.50;
-    this.hMinRunRatio = 0.55;
-    this.hMinSegRatio = 0.60;
-    this.hGapTolerance = 4;
-    this.hMinConsecutiveSegments = 3;
-    
-    // Umbrales para VERTICALES (ajustados al punto medio)
-    this.vMinCoverage = 0.35;      // Antes: 0.25 (muy bajo)
-    this.vMinRunRatio = 0.28;      // Antes: 0.20 (muy bajo)
-    this.vMinSegRatio = 0.42;      // Antes: 0.33 (muy bajo)
-    this.vGapTolerance = 10;       // Antes: 12 (muy alto)
-    this.vMinConsecutiveSegments = 4; // Antes: 3 (muy permisivo)
-    
+    // Valores restaurados: los que dieron Echo Radar 70 lineas / score 0.826-0.878
+    this.minCoverage = 0.50;
+    this.minRunRatio = 0.55;
+    this.minSegRatio = 0.60;
+    this.gapTolerance = 4;
+
     this.segments = 12;
     this.segMin = 0.35;
     this.bradleyT = 8;
@@ -22,7 +14,7 @@ class LineValidator {
     this.inverted = false;
   }
 
-  invalidate() { 
+  invalidate() {
     this.bin = null; this.rowSum = null; this.colSum = null;
   }
 
@@ -73,7 +65,11 @@ class LineValidator {
     return this;
   }
 
+  // FIX: gapTolerance siempre tiene valor valido, nunca undefined
   measure(start, axis, gapTolerance) {
+    let gt = Number(gapTolerance);
+    if (!isFinite(gt) || gt < 0) gt = this.gapTolerance;
+
     const w = this.w, h = this.h, bin = this.bin, S = this.segments;
     const len = axis === 'h' ? w : h;
     const lim = axis === 'h' ? h : w;
@@ -81,6 +77,7 @@ class LineValidator {
     const maxDrift = Math.min(60, Math.round(lim * 0.06));
     let hits = 0, run = 0, best = 0, gap = 0;
     const segHit = new Float64Array(S), segLen = new Float64Array(S);
+
     for (let t = 0; t < len; t++) {
       const s = Math.min(S - 1, Math.floor(t * S / len)); segLen[s]++;
       const idx = axis === 'h' ? pos * w + t : t * w + pos;
@@ -101,43 +98,31 @@ class LineValidator {
         run++; if (run > best) best = run;
       } else {
         gap++;
-        if (gap > gapTolerance) { if (run > best) best = run; run = 0; }
+        if (gap > gt) { if (run > best) best = run; run = 0; }
       }
     }
     if (run > best) best = run;
-    let ok = 0;
-    for (let s = 0; s < S; s++) if (segLen[s] > 0 && segHit[s] / segLen[s] >= this.segMin) ok++;
-    
-    // Filtro de continuidad (anti-fantasmas)
-    let maxConsecutive = 0, currentConsecutive = 0;
+
+    let ok = 0, maxCon = 0, curCon = 0;
     for (let s = 0; s < S; s++) {
-      if (segLen[s] > 0 && segHit[s] / segLen[s] >= this.segMin) {
-        currentConsecutive++;
-        if (currentConsecutive > maxConsecutive) maxConsecutive = currentConsecutive;
-      } else {
-        currentConsecutive = 0;
-      }
+      const good = segLen[s] > 0 && segHit[s] / segLen[s] >= this.segMin;
+      if (good) { ok++; curCon++; if (curCon > maxCon) maxCon = curCon; }
+      else curCon = 0;
     }
-    
-    return { coverage: hits / len, runRatio: best / len, segRatio: ok / S, 
-             consecutive: maxConsecutive, end: pos, drift: drift };
+
+    return {
+      coverage: hits / len, runRatio: best / len, segRatio: ok / S,
+      consecutive: maxCon, end: pos, drift: drift, axis: axis
+    };
   }
 
   measureLine(line) {
-    if (!this.bin) return { coverage: 0, runRatio: 0, segRatio: 0, consecutive: 0, end: 0, drift: 0, isHorizontal: true };
-    
+    if (!this.bin) return { coverage: 0, runRatio: 0, segRatio: 0, consecutive: 0, end: 0, drift: 0, axis: 'h' };
     const a = ((line.angle % 180) + 180) % 180;
-    const isHorizontal = a < 45 || a > 135;
-    
-    const gapTolerance = isHorizontal ? this.hGapTolerance : this.vGapTolerance;
-    
-    if (isHorizontal) {
-      return Object.assign(this.measure(Math.round((line.y1 + line.y2) / 2), 'h', gapTolerance), { isHorizontal: true });
-    } else if (Math.abs(a - 90) <= 3) {
-      return Object.assign(this.measure(Math.round((line.x1 + line.x2) / 2), 'v', gapTolerance), { isHorizontal: false });
-    }
-    
-    // Líneas inclinadas
+
+    if (a <= 3 || a >= 177) return this.measure(Math.round((line.y1 + line.y2) / 2), 'h');
+    if (Math.abs(a - 90) <= 3) return this.measure(Math.round((line.x1 + line.x2) / 2), 'v');
+
     const dx = line.x2 - line.x1, dy = line.y2 - line.y1;
     const n = Math.max(2, Math.round(Math.sqrt(dx*dx + dy*dy)));
     let hits = 0, run = 0, best = 0, gap = 0;
@@ -150,51 +135,39 @@ class LineValidator {
           if (xx >= 0 && xx < this.w && yy >= 0 && yy < this.h && this.bin[yy*this.w + xx] === 1) found = true;
         }
       if (found) { hits++; if (gap > 0) { run += gap; gap = 0; } run++; if (run > best) best = run; }
-      else { gap++; if (gap > gapTolerance) { if (run > best) best = run; run = 0; } }
+      else { gap++; if (gap > this.gapTolerance) { if (run > best) best = run; run = 0; } }
     }
     if (run > best) best = run;
-    return { coverage: hits / (n+1), runRatio: best / (n+1), segRatio: 1, consecutive: 1, end: 0, drift: 0, isHorizontal };
+    return { coverage: hits/(n+1), runRatio: best/(n+1), segRatio: 1, consecutive: 1, end: 0, drift: 0, axis: 'd' };
   }
 
+  // FIX: un solo juego de umbrales, sin depender de campos que pueden faltar
   passes(m) {
-    if (m.isHorizontal) {
-      return m.coverage >= this.hMinCoverage &&
-             m.runRatio >= this.hMinRunRatio &&
-             m.segRatio >= this.hMinSegRatio &&
-             m.consecutive >= this.hMinConsecutiveSegments;
-    } else {
-      return m.coverage >= this.vMinCoverage &&
-             m.runRatio >= this.vMinRunRatio &&
-             m.segRatio >= this.vMinSegRatio &&
-             m.consecutive >= this.vMinConsecutiveSegments;
-    }
+    return m.coverage >= this.minCoverage &&
+           m.runRatio >= this.minRunRatio &&
+           m.segRatio >= this.minSegRatio;
   }
 
   filterResult(result) {
     if (!this.bin) return result;
     const kept = []; let rejected = 0;
     let hAcc = 0, hRej = 0, vAcc = 0, vRej = 0;
-    
+
     for (const l of result.lines) {
       const m = this.measureLine(l);
       if (this.passes(m)) {
         l.coverage = m.coverage; l.runRatio = m.runRatio; l.segRatio = m.segRatio;
         kept.push(l);
-        if (m.isHorizontal) hAcc++; else vAcc++;
+        if (m.axis === 'h') hAcc++; else if (m.axis === 'v') vAcc++;
       } else {
         rejected++;
-        if (m.isHorizontal) hRej++; else vRej++;
+        if (m.axis === 'h') hRej++; else if (m.axis === 'v') vRej++;
       }
     }
-    
+
     result.lines = kept;
     result.metrics.totalLines = kept.length;
     result.metrics.rejectedByEvidence = rejected;
-    result.metrics.hAccepted = hAcc;
-    result.metrics.hRejected = hRej;
-    result.metrics.vAccepted = vAcc;
-    result.metrics.vRejected = vRej;
-    
     logger.info('  Validacion: H=' + hAcc + '/' + (hAcc+hRej) + ' V=' + vAcc + '/' + (vAcc+vRej) + ' (descartadas: ' + rejected + ')');
     return result;
   }
