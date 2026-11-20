@@ -1,49 +1,37 @@
 class RadarMatcher {
   constructor() { 
-    this.name = 'Radar Matcher'; 
+    this.name = 'Cell Detector'; 
     this.color = '#800080';
     this.kernelSize = 6;
     this.step = 2;
     this.threshold = 3;
-    this.minLineLength = 15;
+    this.minCellWidth = 30;
+    this.minCellHeight = 20;
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Radar Matcher (kernel pequeño para líneas finas)');
+    logger.info('Iniciando Cell Detector (deteccion de celdas)...');
     const start = Date.now();
     
-    // Reescalado adaptativo: usar dimensión más grande como referencia
     const maxDim = Math.max(imageData.width, imageData.height);
     const aspect = imageData.width / imageData.height;
-    
-    // Para imágenes anchas (aspecto > 2:1), reescalar menos
     let maxSize = 1200;
-    if (aspect > 2.5) maxSize = 1600;  // Imágenes muy anchas
+    if (aspect > 2.5) maxSize = 1600;
     else if (aspect > 2) maxSize = 1400;
     
     const { data: scaled, width: sw, height: sh, scale } = this.downscale(imageData, maxSize);
-    logger.info('  Imagen reescalada a ' + sw + 'x' + sh + ' (factor: ' + scale.toFixed(3) + ', aspecto: ' + aspect.toFixed(2) + ')');
+    logger.info('  Imagen reescalada a ' + sw + 'x' + sh + ' (factor: ' + scale.toFixed(3) + ')');
     
     const preprocessed = preprocessor.process(scaled);
-    const preMetrics = preprocessor.getMetrics();
-    
     const width = preprocessed.width;
     const height = preprocessed.height;
     const data = preprocessed.data;
     
-    const darkPixels = data.reduce((sum, val) => sum + val, 0);
-    const density = darkPixels / (width * height);
-    
-    // Kernel adaptativo basado en densidad
-    const kernelSize = density > 0.15 ? 8 : this.kernelSize;
-    logger.info('  Densidad: ' + (density * 100).toFixed(1) + '%, Kernel: ' + kernelSize + 'px');
-    
-    const halfKernel = Math.floor(kernelSize / 2);
+    const halfKernel = Math.floor(this.kernelSize / 2);
     const intersections = [];
-    const maxIntersections = 8000;
     
-    for (let y = halfKernel; y < height - halfKernel && intersections.length < maxIntersections; y += this.step) {
-      for (let x = halfKernel; x < width - halfKernel && intersections.length < maxIntersections; x += this.step) {
+    for (let y = halfKernel; y < height - halfKernel; y += this.step) {
+      for (let x = halfKernel; x < width - halfKernel; x += this.step) {
         const hasUp = this.checkDirection(data, width, x, y, 0, -1, halfKernel);
         const hasDown = this.checkDirection(data, width, x, y, 0, 1, halfKernel);
         const hasLeft = this.checkDirection(data, width, x, y, -1, 0, halfKernel);
@@ -57,42 +45,146 @@ class RadarMatcher {
     
     logger.info('  Intersecciones detectadas: ' + intersections.length);
     
-    const groupedIntersections = this.groupIntersectionsSpatial(intersections, kernelSize);
-    logger.info('  Intersecciones tras agrupar: ' + groupedIntersections.length);
+    const grouped = this.groupIntersections(intersections, this.kernelSize);
+    logger.info('  Intersecciones agrupadas: ' + grouped.length);
     
-    const lines = this.generateLines(groupedIntersections, width, height);
-    const filteredLines = lines.filter(l => l.length > this.minLineLength);
+    // Detectar celdas (rectángulos formados por 4 intersecciones)
+    const cells = this.detectCells(grouped, width, height);
+    logger.info('  Celdas detectadas: ' + cells.length);
     
-    const finalLines = filteredLines.map(l => ({
-      x1: Math.round(l.x1 / scale),
-      y1: Math.round(l.y1 / scale),
-      x2: Math.round(l.x2 / scale),
-      y2: Math.round(l.y2 / scale),
-      angle: l.angle,
-      length: Math.round(l.length / scale)
-    }));
-    
-    logger.info('  Lineas validas (>' + this.minLineLength + 'px): ' + finalLines.length);
+    // Convertir celdas a líneas (bordes de las celdas)
+    const lines = this.cellsToLines(cells, scale);
     
     const time = Date.now() - start;
-    logger.info('Radar Matcher completado en ' + time + 'ms. Lineas: ' + finalLines.length);
+    logger.info('Cell Detector completado en ' + time + 'ms. Celdas: ' + cells.length + ', Lineas: ' + lines.length);
     
     return { 
       algorithm: this.name, 
       color: this.color, 
-      lines: finalLines, 
+      lines: lines, 
       metrics: { 
-        totalLines: finalLines.length, 
+        totalLines: lines.length, 
         executionTime: time,
-        preprocessingTime: preMetrics.preprocessingTime,
-        skewAngle: preMetrics.skewAngle,
+        cellsDetected: cells.length,
         intersectionsDetected: intersections.length,
-        intersectionsGrouped: groupedIntersections.length,
-        kernelSize: kernelSize,
-        density: density,
-        aspectRatio: aspect
+        intersectionsGrouped: grouped.length
       } 
     };
+  }
+  
+  detectCells(intersections, width, height) {
+    const cells = [];
+    const used = new Set();
+    
+    // Ordenar intersecciones por Y luego X
+    const sorted = [...intersections].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+    
+    for (let i = 0; i < sorted.length; i++) {
+      if (used.has(i)) continue;
+      
+      const topLeft = sorted[i];
+      
+      // Buscar esquina superior derecha (misma Y, X mayor)
+      let topRight = -1;
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (Math.abs(sorted[j].y - topLeft.y) < 5 && sorted[j].x > topLeft.x + this.minCellWidth) {
+          topRight = j;
+          break;
+        }
+      }
+      
+      if (topRight === -1) continue;
+      
+      // Buscar esquina inferior izquierda (misma X, Y mayor)
+      let bottomLeft = -1;
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (Math.abs(sorted[j].x - topLeft.x) < 5 && sorted[j].y > topLeft.y + this.minCellHeight) {
+          bottomLeft = j;
+          break;
+        }
+      }
+      
+      if (bottomLeft === -1) continue;
+      
+      // Buscar esquina inferior derecha
+      const bottomRightX = sorted[topRight].x;
+      const bottomRightY = sorted[bottomLeft].y;
+      
+      let bottomRight = -1;
+      for (let j = 0; j < sorted.length; j++) {
+        if (Math.abs(sorted[j].x - bottomRightX) < 5 && Math.abs(sorted[j].y - bottomRightY) < 5) {
+          bottomRight = j;
+          break;
+        }
+      }
+      
+      if (bottomRight === -1) continue;
+      
+      // Celda válida
+      cells.push({
+        x1: topLeft.x,
+        y1: topLeft.y,
+        x2: sorted[topRight].x,
+        y2: sorted[bottomLeft].y,
+        width: sorted[topRight].x - topLeft.x,
+        height: sorted[bottomLeft].y - topLeft.y
+      });
+      
+      used.add(i);
+      used.add(topRight);
+      used.add(bottomLeft);
+      used.add(bottomRight);
+    }
+    
+    return cells;
+  }
+  
+  cellsToLines(cells, scale) {
+    const lines = [];
+    
+    for (const cell of cells) {
+      // Borde superior
+      lines.push({
+        x1: Math.round(cell.x1 / scale),
+        y1: Math.round(cell.y1 / scale),
+        x2: Math.round(cell.x2 / scale),
+        y2: Math.round(cell.y1 / scale),
+        angle: 0,
+        length: cell.width / scale
+      });
+      
+      // Borde inferior
+      lines.push({
+        x1: Math.round(cell.x1 / scale),
+        y1: Math.round(cell.y2 / scale),
+        x2: Math.round(cell.x2 / scale),
+        y2: Math.round(cell.y2 / scale),
+        angle: 0,
+        length: cell.width / scale
+      });
+      
+      // Borde izquierdo
+      lines.push({
+        x1: Math.round(cell.x1 / scale),
+        y1: Math.round(cell.y1 / scale),
+        x2: Math.round(cell.x1 / scale),
+        y2: Math.round(cell.y2 / scale),
+        angle: 90,
+        length: cell.height / scale
+      });
+      
+      // Borde derecho
+      lines.push({
+        x1: Math.round(cell.x2 / scale),
+        y1: Math.round(cell.y1 / scale),
+        x2: Math.round(cell.x2 / scale),
+        y2: Math.round(cell.y2 / scale),
+        angle: 90,
+        length: cell.height / scale
+      });
+    }
+    
+    return lines;
   }
   
   downscale(imageData, maxSize) {
@@ -141,7 +233,7 @@ class RadarMatcher {
     return false;
   }
   
-  groupIntersectionsSpatial(intersections, minDistance) {
+  groupIntersections(intersections, minDistance) {
     if (intersections.length === 0) return [];
     
     const cellSize = minDistance;
@@ -192,54 +284,6 @@ class RadarMatcher {
     }
     
     return grouped;
-  }
-  
-  generateLines(intersections, width, height) {
-    const lines = [];
-    const rows = new Map();
-    const cols = new Map();
-    
-    for (const p of intersections) {
-      let foundRow = false;
-      for (const [y, xs] of rows.entries()) {
-        if (Math.abs(y - p.y) < 4) {
-          xs.push(p.x);
-          foundRow = true;
-          break;
-        }
-      }
-      if (!foundRow) rows.set(p.y, [p.x]);
-      
-      let foundCol = false;
-      for (const [x, ys] of cols.entries()) {
-        if (Math.abs(x - p.x) < 4) {
-          ys.push(p.y);
-          foundCol = true;
-          break;
-        }
-      }
-      if (!foundCol) cols.set(p.x, [p.y]);
-    }
-    
-    for (const [y, xs] of rows.entries()) {
-      if (xs.length >= 2) {
-        xs.sort((a, b) => a - b);
-        const x1 = xs[0];
-        const x2 = xs[xs.length - 1];
-        lines.push({ x1: x1, y1: y, x2: x2, y2: y, angle: 0, length: x2 - x1 });
-      }
-    }
-    
-    for (const [x, ys] of cols.entries()) {
-      if (ys.length >= 2) {
-        ys.sort((a, b) => a - b);
-        const y1 = ys[0];
-        const y2 = ys[ys.length - 1];
-        lines.push({ x1: x, y1: y1, x2: x, y2: y2, angle: 90, length: y2 - y1 });
-      }
-    }
-    
-    return lines;
   }
 }
 window.RadarMatcher = RadarMatcher;

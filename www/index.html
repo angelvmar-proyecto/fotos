@@ -56,10 +56,6 @@
         <h3>⚙️ Algoritmos (11 disponibles)</h3>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_hough" value="Hough Transform">
-                <span class="color-dot" style="background:#FF0000;"></span>
-                <label for="algo_hough">Hough Transform</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('hough')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
@@ -80,9 +76,9 @@
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_radar" value="Radar Matcher" checked>
+                <input type="checkbox" id="algo_radar" value="Cell Detector" checked>
                 <span class="color-dot" style="background:#800080;"></span>
-                <label for="algo_radar">Radar Matcher</label>
+                <label for="algo_radar">Cell Detector</label>
             </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('radar')">🔧 Optimizar</button>
         </div>
@@ -98,64 +94,28 @@
         </div>
         <div class="checkbox-item">
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-        <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
             <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
         </div>
             <span class="color-dot" style="background:#FF1493;"></span>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
             <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
         </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
             </div>
         <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('echo')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_lsd" value="LSD">
-                <span class="color-dot" style="background:#00FF00;"></span>
-                <label for="algo_lsd">LSD</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('lsd')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_gabor" value="Gabor Filters">
-                <span class="color-dot" style="background:#FF00FF;"></span>
-                <label for="algo_gabor">Gabor Filters</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('gabor')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_frangi" value="Frangi Filter" checked>
-                <span class="color-dot" style="background:#00FFFF;"></span>
-                <label for="algo_frangi">Frangi Filter</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('frangi')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
@@ -168,18 +128,10 @@
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_fourier_adv" value="Fourier Avanzado" checked>
-                <span class="color-dot" style="background:#FF6600;"></span>
-                <label for="algo_fourier_adv">Fourier Avanzado (Pasa-Bajas + Valle)</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('fourier_adv')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
-                <input type="checkbox" id="algo_cfar" value="CFAR Detector">
-                <span class="color-dot" style="background:#FFC0CB;"></span>
-                <label for="algo_cfar">CFAR Detector</label>
-            </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('cfar')">🔧 Optimizar</button>
         </div>
         <br>
@@ -207,18 +159,12 @@
     <script src="js/utils/line-validator.js"></script>
     <script src="js/utils/text-remover.js"></script>
     <script src="js/visualization/canvas-manager.js"></script>
-    <script src="js/algorithms/hough.js"></script>
     <script src="js/algorithms/profile-projection.js"></script>
     <script src="js/algorithms/morphological.js"></script>
     <script src="js/algorithms/radar-matcher.js"></script>
     <script src="js/algorithms/echo-radar.js"></script>
     <script src="js/algorithms/lattice-radar.js"></script>
-    <script src="js/algorithms/lsd.js"></script>
-    <script src="js/algorithms/gabor.js"></script>
-    <script src="js/algorithms/frangi.js"></script>
     <script src="js/algorithms/fourier.js"></script>
-    <script src="js/algorithms/fourier-avanzado.js"></script>
-    <script src="js/algorithms/cfar.js"></script>
     <script src="js/runner.js"></script>
     <script src="js/diagnosis/adaptive-diagnosis.js"></script>
     <script src="js/diagnosis/smart-analyzer.js"></script>
@@ -240,18 +186,12 @@
                 smartAnalyzer = new SmartAnalyzer();
 
                 algorithmInstances = {
-                    hough: new HoughTransform(),
                     profile: new ProfileProjection(),
                     morph: new Morphological(),
                     radar: new RadarMatcher(),
                     echo: new EchoRadar(),
                     lattice: new LatticeRadar(),
-                    lsd: new LSD(),
-                    gabor: new GaborFilters(),
-                    frangi: new FrangiFilter(),
                     fourier: new FourierAnalysis(),
-                    fourier_adv: new FourierAvanzado(),
-                    cfar: new CFARDetector()
                 };
 
                 Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
@@ -576,3 +516,36 @@
     </script>
 </body>
 </html>
+
+// Función para fusionar resultados de Echo Radar + Lattice Radar
+function mergeRadarResults(echoResult, latticeResult) {
+  if (!echoResult || !latticeResult) return echoResult || latticeResult;
+  
+  const mergedLines = [...echoResult.lines];
+  
+  // Agregar verticales de Lattice Radar que no estén en Echo Radar
+  for (const latticeLine of latticeResult.lines) {
+    const isDuplicate = mergedLines.some(echoLine => {
+      if (echoLine.angle === 90 && latticeLine.angle === 90) {
+        return Math.abs(echoLine.x1 - latticeLine.x1) < 5;
+      }
+      return false;
+    });
+    
+    if (!isDuplicate) {
+      mergedLines.push(latticeLine);
+    }
+  }
+  
+  return {
+    algorithm: 'Echo Radar + Lattice',
+    color: '#00BFFF',
+    lines: mergedLines,
+    metrics: {
+      totalLines: mergedLines.length,
+      executionTime: echoResult.metrics.executionTime + latticeResult.metrics.executionTime,
+      echoLines: echoResult.metrics.totalLines,
+      latticeLines: latticeResult.metrics.totalLines
+    }
+  };
+}
