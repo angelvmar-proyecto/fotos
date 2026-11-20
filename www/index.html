@@ -136,6 +136,52 @@
         let canvasManager, runner, selector, smartAnalyzer, currentImageData = null;
         let isRunning = false, cancelRequested = false, algorithmResults = [];
         let algorithmInstances = {}, currentImageProfile = null;
+        // Sistema de auto-aprendizaje con localStorage
+        const LearningSystem = {
+            storageKey: "tableDetector_learning",
+            
+            saveResult(imageType, parameters, score, linesDetected) {
+                try {
+                    const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
+                    if (!data[imageType]) data[imageType] = [];
+                    data[imageType].push({
+                        parameters: parameters,
+                        score: score,
+                        linesDetected: linesDetected,
+                        timestamp: Date.now()
+                    });
+                    if (data[imageType].length > 10) data[imageType] = data[imageType].slice(-10);
+                    localStorage.setItem(this.storageKey, JSON.stringify(data));
+                    logger.info("  Aprendizaje: resultado guardado (score: " + score.toFixed(3) + ")");
+                } catch(e) { logger.error("Error guardando aprendizaje: " + e); }
+            },
+            
+            getBestParameters(imageType) {
+                try {
+                    const data = JSON.parse(localStorage.getItem(this.storageKey) || "{}");
+                    if (!data[imageType] || data[imageType].length === 0) return null;
+                    const best = data[imageType].reduce((a, b) => a.score > b.score ? a : b);
+                    logger.info("  Aprendizaje: usando parámetros óptimos de " + imageType + " (score: " + best.score.toFixed(3) + ")");
+                    return best.parameters;
+                } catch(e) { return null; }
+            },
+            
+            applyLearnedParameters(imageType) {
+                const params = this.getBestParameters(imageType);
+                if (!params) return false;
+                
+                Object.entries(params).forEach(([algoName, algoParams]) => {
+                    const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
+                    if (algo) {
+                        Object.entries(algoParams).forEach(([key, value]) => {
+                            if (algo[key] !== undefined) algo[key] = value;
+                        });
+                    }
+                });
+                return true;
+            }
+        };
+
         function initApp() {
             logger.info("Iniciando aplicacion...");
             try {
@@ -221,6 +267,13 @@
                     selector.history = []; algorithmResults = []; currentImageProfile = null;
                     canvasManager.clearLayers(); document.getElementById('layerControls').innerHTML = '';
                     document.getElementById('diagnosisBox').style.display = 'none'; document.getElementById('analysisBox').style.display = 'none';
+                    // Aplicar parámetros aprendidos si existen
+                    const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : null;
+                    if (imageType) {
+                        const applied = LearningSystem.applyLearnedParameters(imageType);
+                        if (applied) logger.info("Parámetros aprendidos aplicados para " + imageType);
+                    }
+
                     setTimeout(() => { canvasManager.loadImage(currentImageData); document.getElementById('runButton').disabled = false; document.getElementById('imgInfo').textContent = img.width + 'x' + img.height; logger.info("Imagen cargada: " + img.width + "x" + img.height); }, 100);
                 };
                 img.src = e.target.result;
@@ -255,6 +308,31 @@
             hideStatus();
             if (algorithmResults.length > 0 && !cancelRequested) {
                 try { const diagnosis = selector.analyze(algorithmResults, currentImageData); showDiagnosis(diagnosis); updateLayerControls(); }
+                    
+                    // Auto-aprendizaje: guardar resultado
+                    const imageType = smartAnalyzer.imageProfile ? smartAnalyzer.imageProfile.imageType : "UNKNOWN";
+                    const currentParams = {};
+                    Object.values(algorithmInstances).forEach(algo => {
+                        currentParams[algo.name] = {};
+                        ["minCoverage", "minRunRatio", "gapTolerance", "minDistance", "minCellWidth", "minCellHeight"].forEach(key => {
+                            if (algo[key] !== undefined) currentParams[algo.name][key] = algo[key];
+                        });
+                    });
+                    LearningSystem.saveResult(imageType, currentParams, diagnosis.ranking[0].score, diagnosis.ranking[0].metrics.totalLines);
+                    
+                    // Auto-optimización si el score es bajo
+                    if (diagnosis.ranking[0].score < 0.7 && !window._autoOptimized) {
+                        logger.info("Score bajo (" + diagnosis.ranking[0].score.toFixed(3) + "), auto-optimizando...");
+                        window._autoOptimized = true;
+                        setTimeout(() => {
+                            optimizeSelected();
+                            setTimeout(() => {
+                                window._autoOptimized = false;
+                                runAlgorithms();
+                            }, 100);
+                        }, 500);
+                    }
+
                 catch (e) { logger.error("Error en diagnostico: " + e.message); }
             }
             isRunning = false; document.getElementById('runButton').disabled = false; document.getElementById('cancelButton').style.display = 'none';
@@ -284,6 +362,8 @@
                 container.appendChild(toggle);
             });
         }
+        // Sistema de auto-aprendizaje con localStorage
+
         function optimizeSelected() {
             if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
             const selected = Array.from(document.querySelectorAll(".checkbox-item input[type="checkbox"]:checked")).map(cb => cb.value);
