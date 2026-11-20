@@ -105,6 +105,7 @@
         <button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
         <br><br>
         <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+        <button onclick="optimizeSelected()" class="btn-secondary">🔧 Optimizar seleccionados</button>
         <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
         <div id="statusIndicator"></div>
         <div id="analysisBox" style="display:none;"></div>
@@ -283,6 +284,58 @@
                 container.appendChild(toggle);
             });
         }
+        function optimizeSelected() {
+            if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
+            const selected = Array.from(document.querySelectorAll(".checkbox-item input[type="checkbox"]:checked")).map(cb => cb.value);
+            let adjusted = 0;
+            selected.forEach(algoName => {
+                const result = algorithmResults.find(r => r.algorithm === algoName);
+                if (!result) return;
+                const lines = result.metrics.totalLines;
+                const algo = Object.values(algorithmInstances).find(a => a.name === algoName);
+                if (!algo) return;
+                
+                if (algoName === "Echo Radar" || algoName === "Lattice Radar") {
+                    if (lines < 30) {
+                        lineValidator.minCoverage = Math.max(0.25, lineValidator.minCoverage - 0.10);
+                        lineValidator.minRunRatio = Math.max(0.25, lineValidator.minRunRatio - 0.10);
+                        lineValidator.gapTolerance = Math.min(14, lineValidator.gapTolerance + 2);
+                        logger.info("  " + algoName + ": relajando umbrales de evidencia (pocas lineas)");
+                        adjusted++;
+                    } else if (lines > 150) {
+                        lineValidator.minCoverage = Math.min(0.75, lineValidator.minCoverage + 0.05);
+                        lineValidator.minRunRatio = Math.min(0.75, lineValidator.minRunRatio + 0.05);
+                        logger.info("  " + algoName + ": exigiendo mas evidencia (muchas lineas)");
+                        adjusted++;
+                    }
+                } else if (algoName === "Fourier Analysis") {
+                    if (lines > 150 && algo.setMinDistance) {
+                        algo.setMinDistance((algo.minDistance || 15) + 5);
+                        logger.info("  Fourier: aumentando minDistance a " + algo.minDistance);
+                        adjusted++;
+                    } else if (lines < 50 && algo.setMinDistance) {
+                        algo.setMinDistance(Math.max(6, (algo.minDistance || 15) - 4));
+                        logger.info("  Fourier: reduciendo minDistance a " + algo.minDistance);
+                        adjusted++;
+                    }
+                } else if (algoName === "Cell Detector") {
+                    if (lines < 20) {
+                        algo.minCellWidth = Math.max(15, (algo.minCellWidth || 20) - 3);
+                        algo.minCellHeight = Math.max(10, (algo.minCellHeight || 15) - 3);
+                        logger.info("  Cell Detector: reduciendo tamaño minimo de celda");
+                        adjusted++;
+                    }
+                }
+            });
+            if (adjusted > 0) {
+                logger.info("Optimizacion completada: " + adjusted + " algoritmos ajustados. Ejecuta de nuevo.");
+                alert(adjusted + " algoritmos optimizados. Ejecuta de nuevo para ver mejoras.");
+            } else {
+                logger.info("No se requirieron ajustes");
+                alert("Los parametros ya estan optimizados");
+            }
+        }
+
         function cancelExecution() { cancelRequested = true; logger.info("Cancelacion solicitada..."); }
         function showStatus(text) { const el = document.getElementById('statusIndicator'); el.textContent = text; el.style.display = 'block'; }
         function hideStatus() { document.getElementById('statusIndicator').style.display = 'none'; }
