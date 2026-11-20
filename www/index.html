@@ -253,7 +253,10 @@
         function selectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true); logger.info("Todos seleccionados"); }
         function deselectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false); logger.info("Todos deseleccionados"); }
         function handleImageLoad(event) {
-            const file = event.target.files[0]; if (!file) return;
+            alert("PASO 1: Función handleImageLoad iniciada");
+            const file = event.target.files[0];
+            if (!file) { alert("No se seleccionó archivo"); return; }
+            alert("PASO 2: Archivo encontrado: " + file.name); if (!file) return;
             logger.info("Cargando: " + file.name);
             const reader = new FileReader();
             reader.onload = function(e) {
