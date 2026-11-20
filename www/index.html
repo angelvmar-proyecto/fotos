@@ -2,62 +2,135 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Detectores de Tablas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detectores de Líneas de Tabla</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; margin: 0; }
-        .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-        button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; cursor: pointer; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        .btn-secondary { background: #2196F3; }
-        .btn-danger { background: #f44336; }
-        .btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
-        #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
-        #mainCanvas { display: block; touch-action: none; }
-        .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
-        .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
-        .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
-        .checkbox-item { margin: 8px 0; padding: 8px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
-        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
-        .checkbox-item label { cursor: pointer; flex: 1; }
-        .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-        #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
-        .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
-        .layer-toggle.inactive { opacity: 0.35; }
-        #diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; }
-        #analysisBox { background: #1e3a5f; border-left: 4px solid #2196F3; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
-        h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
-        h3 { color: #4CAF50; margin-top: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .panel {
+            background-color: #2a2a2a;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+            border: 2px solid #444;
+            margin: 10px 0;
+        }
+        #mainCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        .canvas-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .checkbox-item {
+            margin: 8px 0;
+            padding: 8px;
+            background-color: #333;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .checkbox-item div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4a4a4a;
+            color: #e0e0e0;
+        }
+        button:hover {
+            background-color: #5a5a5a;
+        }
+        .btn-optimize {
+            padding: 4px 8px;
+            font-size: 12px;
+            background-color: #3a5a3a;
+        }
+        .btn-optimize:hover {
+            background-color: #4a6a4a;
+        }
+        #logContainer {
+            background-color: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        #statusIndicator {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #2a4a2a;
+            border-radius: 4px;
+            display: none;
+        }
+        #analysisBox, #diagnosisBox {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #2a3a4a;
+            border-radius: 4px;
+            display: none;
+        }
+        .layer-toggle {
+            display: inline-block;
+            margin: 5px;
+            padding: 5px 10px;
+            background-color: #3a3a3a;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .layer-toggle.inactive {
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
-    <h2>🔍 Detectores de Tablas</h2>
-
+    <h1>Detectores de Líneas de Tabla</h1>
+    
     <div class="panel">
-        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
-        <input type="file" id="imageInput" accept="image/*" style="display: none;">
-        <span id="imgInfo" style="margin-left:10px; color:#999;"></span>
-    </div>
-
-    <div class="panel" id="vizPanel">
-        <h3>🎨 Visualización (pellizca para zoom)</h3>
-        <div id="canvasContainer">
+        <h3>Imagen</h3>
+        <input type="file" id="imageInput" accept="image/*">
+        <div class="canvas-container">
             <canvas id="mainCanvas"></canvas>
             <div class="canvas-controls">
-                <button onclick="canvasManager.zoomIn()">➕</button>
-                <button onclick="canvasManager.zoomOut()">➖</button>
-                <button onclick="canvasManager.reset()">🔄</button>
+                <button onclick="canvasManager.zoomIn()">+</button>
+                <button onclick="canvasManager.zoomOut()">-</button>
+                <button onclick="canvasManager.reset()">Reset</button>
             </div>
         </div>
         <div id="layerControls"></div>
     </div>
 
     <div class="panel">
-        <h3>⚙️ Algoritmos (11 disponibles)</h3>
-        <div class="checkbox-item">
-            <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('hough')">🔧 Optimizar</button>
-        </div>
+        <h3>⚙️ Algoritmos (6 disponibles)</h3>
         <div class="checkbox-item">
             <div>
                 <input type="checkbox" id="algo_profile" value="Profile Projection" checked>
@@ -87,36 +160,16 @@
                 <input type="checkbox" id="algo_echo" value="Echo Radar" checked>
                 <span class="color-dot" style="background:#00BFFF;"></span>
                 <label for="algo_echo">Echo Radar</label>
-        <div class="checkbox-item">
-            <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
-            <span class="color-dot" style="background:#FF1493;"></span>
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
-        <div class="checkbox-item">
-        <div class="checkbox-item">
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        </div>
-            <span class="color-dot" style="background:#FF1493;"></span>
-        <div class="checkbox-item">
-            <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
-        <div class="checkbox-item">
-        </div>
-        <div class="checkbox-item">
             </div>
-        <div class="checkbox-item">
             <button class="btn-optimize" onclick="optimizeAlgorithm('echo')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('lsd')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('gabor')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('frangi')">🔧 Optimizar</button>
+                <input type="checkbox" id="algo_lattice" value="Lattice Radar" checked>
+                <span class="color-dot" style="background:#FF1493;"></span>
+                <label for="algo_lattice">Lattice Radar (Cruces Anclados)</label>
+            </div>
+            <button class="btn-optimize" onclick="optimizeAlgorithm('lattice')">🔧 Optimizar</button>
         </div>
         <div class="checkbox-item">
             <div>
@@ -126,31 +179,21 @@
             </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
         </div>
-        <div class="checkbox-item">
-            <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('fourier_adv')">🔧 Optimizar</button>
-        </div>
-        <div class="checkbox-item">
-            <div>
-            <button class="btn-optimize" onclick="optimizeAlgorithm('cfar')">🔧 Optimizar</button>
-        </div>
-        <br>
-        <button onclick="selectAll()">✅ Todos</button>
-        <button onclick="deselectAll()">❌ Ninguno</button>
-        <button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
-        <br><br>
-        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
-        <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
+        <button onclick="selectAll()">Seleccionar Todos</button>
+        <button onclick="deselectAll()">Deseleccionar Todos</button>
+        <button onclick="applySmartSelection()">🧠 Selección Inteligente</button>
+        <button onclick="runAlgorithms()">🚀 Ejecutar</button>
+        <button onclick="cancelExecution()" id="cancelButton" style="display:none;">⏹️ Cancelar</button>
         <div id="statusIndicator"></div>
-        <div id="analysisBox" style="display:none;"></div>
-        <div id="diagnosisBox" style="display:none;"></div>
+        <div id="analysisBox"></div>
+        <div id="diagnosisBox"></div>
     </div>
 
     <div class="panel">
         <h3>📝 Log</h3>
-        <button class="btn-secondary" onclick="copyLog()">📋 Copiar Log</button>
-        <button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar Log</button>
-        <div class="log-container" id="logContainer"></div>
+        <button onclick="copyLog()">📋 Copiar Log</button>
+        <button onclick="clearLog()">🗑️ Limpiar Log</button>
+        <div id="logContainer"></div>
     </div>
 
     <script src="js/utils/logger.js"></script>
@@ -175,7 +218,6 @@
         let cancelRequested = false;
         let algorithmResults = [];
         let algorithmInstances = {};
-        let currentImageProfile = null;
 
         function initApp() {
             logger.info("Iniciando aplicacion...");
@@ -191,13 +233,13 @@
                     radar: new RadarMatcher(),
                     echo: new EchoRadar(),
                     lattice: new LatticeRadar(),
-                    fourier: new FourierAnalysis(),
+                    fourier: new FourierAnalysis()
                 };
 
                 Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
 
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
-                logger.info("Aplicacion lista. 11 algoritmos registrados.");
+                logger.info("Aplicacion lista. 6 algoritmos registrados.");
             } catch (e) {
                 alert("ERROR: " + e.message);
                 logger.error(e.message);
@@ -214,10 +256,8 @@
             currentImageProfile = smartAnalyzer.analyzeImage(currentImageData);
             const suggestions = smartAnalyzer.getRecommendation();
 
-            // Deseleccionar todos
             document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
 
-            // Seleccionar algoritmos recomendados
             const allAlgos = Object.values(algorithmInstances);
             suggestions.primary.forEach(name => {
                 const algo = allAlgos.find(a => a.name === name);
@@ -239,7 +279,6 @@
                 }
             });
 
-            // Aplicar parámetros sugeridos
             Object.entries(suggestions.params).forEach(([algoName, params]) => {
                 if (algoName === 'deskew') return;
                 const algo = allAlgos.find(a => a.name === algoName);
@@ -253,15 +292,13 @@
                 }
             });
 
-            // Mostrar análisis en UI
             showAnalysis(currentImageProfile, suggestions);
-
             logger.info('Selección inteligente aplicada');
         }
 
         function showAnalysis(profile, suggestions) {
             const box = document.getElementById('analysisBox');
-            let html = '<strong style="color:#2196F3;">🧠 ANÁLISIS DE IMAGEN</strong><br>';
+            let html = '<strong>🧠 ANÁLISIS DE IMAGEN</strong><br>';
             html += '<strong>Tipo:</strong> ' + profile.imageType + '<br>';
             html += '<strong>Brillo:</strong> ' + profile.meanGray + (profile.isDark ? ' (oscura)' : ' (clara)') + '<br>';
             html += '<strong>Densidad bordes:</strong> ' + profile.edgeDensity + '%<br>';
@@ -292,7 +329,6 @@
             logger.info(`Optimizando ${algorithmInstances[algoKey].name}...`);
             
             const lines = result.metrics.totalLines;
-            const executionTime = result.metrics.executionTime;
             
             if (algoKey === 'fourier') {
                 if (lines > 150) {
@@ -301,14 +337,6 @@
                 } else if (lines < 50) {
                     algorithmInstances[algoKey].setMinDistance(10);
                     logger.info(`Fourier: pocas líneas (${lines}), reduciendo minDistance a 10`);
-                }
-            } else if (algoKey === 'radar') {
-                if (lines === 0) {
-                    logger.info(`Radar: 0 líneas detectadas, sugiere usar otro algoritmo`);
-                }
-            } else if (algoKey === 'cfar') {
-                if (lines < 10) {
-                    logger.info(`CFAR: muy pocas líneas (${lines}), umbral muy alto`);
                 }
             }
 
@@ -334,7 +362,8 @@
                 const img = new Image();
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    canvas.width = img.width; canvas.height = img.height;
+                    canvas.width = img.width;
+                    canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -382,7 +411,10 @@
             logger.info("Algoritmos a ejecutar: " + selected.join(", "));
 
             for (let i = 0; i < selected.length; i++) {
-                if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
+                if (cancelRequested) {
+                    logger.info("Ejecucion cancelada");
+                    break;
+                }
 
                 const algoName = selected[i];
                 showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
@@ -430,7 +462,7 @@
 
         function showDiagnosis(diagnosis) {
             const box = document.getElementById('diagnosisBox');
-            let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
+            let html = '<strong>🏆 ' + diagnosis.best + '</strong><br>';
             html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
 
             if (diagnosis.ranking && diagnosis.ranking.length > 1) {
@@ -516,36 +548,3 @@
     </script>
 </body>
 </html>
-
-// Función para fusionar resultados de Echo Radar + Lattice Radar
-function mergeRadarResults(echoResult, latticeResult) {
-  if (!echoResult || !latticeResult) return echoResult || latticeResult;
-  
-  const mergedLines = [...echoResult.lines];
-  
-  // Agregar verticales de Lattice Radar que no estén en Echo Radar
-  for (const latticeLine of latticeResult.lines) {
-    const isDuplicate = mergedLines.some(echoLine => {
-      if (echoLine.angle === 90 && latticeLine.angle === 90) {
-        return Math.abs(echoLine.x1 - latticeLine.x1) < 5;
-      }
-      return false;
-    });
-    
-    if (!isDuplicate) {
-      mergedLines.push(latticeLine);
-    }
-  }
-  
-  return {
-    algorithm: 'Echo Radar + Lattice',
-    color: '#00BFFF',
-    lines: mergedLines,
-    metrics: {
-      totalLines: mergedLines.length,
-      executionTime: echoResult.metrics.executionTime + latticeResult.metrics.executionTime,
-      echoLines: echoResult.metrics.totalLines,
-      latticeLines: latticeResult.metrics.totalLines
-    }
-  };
-}
