@@ -2,10 +2,11 @@ class LatticeRadar {
   constructor() {
     this.name = 'Lattice Radar';
     this.color = '#FF1493';
-    this.crossThreshold = 0.70;
-    this.stabilityThreshold = 1.5;
+    this.crossThreshold = 0.90; // Aumentado de 0.70 a 0.90 (90% de cruces)
+    this.stabilityThreshold = 1.0; // Reducido de 1.5 a 1.0 (más estricto)
     this.windowSize = 2;
     this.numBands = 20;
+    this.minVerticalSpacing = 30; // Espaciado mínimo entre verticales
   }
 
   async detect(imageData) {
@@ -28,10 +29,26 @@ class LatticeRadar {
     const verticals = this.findVerticals(bin, w, h, yPositions, bandWidth);
     logger.info('  Verticales validadas por cruces: ' + verticals.length);
 
-    const lines = verticals.map(x => ({ x1: x, y1: 0, x2: x, y2: h - 1, angle: 90, length: h }));
+    // Filtrar verticales demasiado cercanas
+    const filtered = this.filterCloseVerticals(verticals);
+    logger.info('  Verticales tras filtrar cercanas: ' + filtered.length);
+
+    const lines = filtered.map(x => ({ x1: x, y1: 0, x2: x, y2: h - 1, angle: 90, length: h }));
     const time = Date.now() - t0;
     logger.info('Lattice Radar completado en ' + time + 'ms. Lineas: ' + lines.length);
-    return { algorithm: this.name, color: this.color, lines: lines, metrics: { totalLines: lines.length, executionTime: time, horizontalsUsed: horizontals.length } };
+    
+    return { 
+      algorithm: this.name, 
+      color: this.color, 
+      lines: lines, 
+      metrics: { 
+        totalLines: lines.length, 
+        executionTime: time, 
+        horizontalsUsed: horizontals.length,
+        crossThreshold: this.crossThreshold,
+        stabilityThreshold: this.stabilityThreshold
+      } 
+    };
   }
 
   detectHorizontals(bin, w, h) {
@@ -99,6 +116,20 @@ class LatticeRadar {
     const mean = xPositions.reduce((a, b) => a + b, 0) / xPositions.length;
     const variance = xPositions.reduce((s, xi) => s + (xi - mean) ** 2, 0) / xPositions.length;
     return Math.sqrt(variance);
+  }
+
+  filterCloseVerticals(verticals) {
+    if (verticals.length === 0) return [];
+    const sorted = [...verticals].sort((a, b) => a - b);
+    const filtered = [sorted[0]];
+    
+    for (let i = 1; i < sorted.length; i++) {
+      const lastX = filtered[filtered.length - 1];
+      if (sorted[i] - lastX >= this.minVerticalSpacing) {
+        filtered.push(sorted[i]);
+      }
+    }
+    return filtered;
   }
 }
 window.LatticeRadar = LatticeRadar;
