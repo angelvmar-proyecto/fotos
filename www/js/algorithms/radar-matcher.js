@@ -5,12 +5,13 @@ class RadarMatcher {
     this.kernelSize = 6;
     this.step = 2;
     this.threshold = 3;
-    this.minCellWidth = 30;
-    this.minCellHeight = 20;
+    this.minCellWidth = 20;
+    this.minCellHeight = 15;
+    this.tolerance = 8; // Tolerancia para agrupar intersecciones
   }
   
   async detect(imageData) {
-    logger.info('Iniciando Cell Detector (deteccion de celdas)...');
+    logger.info('Iniciando Cell Detector (deteccion de celdas por filas adyacentes)...');
     const start = Date.now();
     
     const maxDim = Math.max(imageData.width, imageData.height);
@@ -45,17 +46,12 @@ class RadarMatcher {
     
     logger.info('  Intersecciones detectadas: ' + intersections.length);
     
-    const grouped = this.groupIntersections(intersections, this.kernelSize);
-    logger.info('  Intersecciones agrupadas: ' + grouped.length);
-    
-    // Detectar celdas (rectángulos formados por 4 intersecciones)
-    const cells = this.detectCells(grouped, width, height);
+    const cells = this.detectCells(intersections, width, height);
     logger.info('  Celdas detectadas: ' + cells.length);
     
-    // Convertir celdas a líneas (bordes de las celdas)
     const lines = this.cellsToLines(cells, scale);
-    
     const time = Date.now() - start;
+    
     logger.info('Cell Detector completado en ' + time + 'ms. Celdas: ' + cells.length + ', Lineas: ' + lines.length);
     
     return { 
@@ -66,74 +62,69 @@ class RadarMatcher {
         totalLines: lines.length, 
         executionTime: time,
         cellsDetected: cells.length,
-        intersectionsDetected: intersections.length,
-        intersectionsGrouped: grouped.length
+        intersectionsDetected: intersections.length
       } 
     };
   }
   
   detectCells(intersections, width, height) {
-    const cells = [];
-    const used = new Set();
+    if (intersections.length < 4) return [];
     
-    // Ordenar intersecciones por Y luego X
+    // Ordenar por Y, luego por X
     const sorted = [...intersections].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
     
-    for (let i = 0; i < sorted.length; i++) {
-      if (used.has(i)) continue;
+    // Agrupar en filas (líneas horizontales)
+    const rows = [];
+    let currentRow = [sorted[0]];
+    
+    for (let i = 1; i < sorted.length; i++) {
+      if (Math.abs(sorted[i].y - currentRow[0].y) < this.tolerance) {
+        currentRow.push(sorted[i]);
+      } else {
+        rows.push(currentRow.sort((a, b) => a.x - b.x));
+        currentRow = [sorted[i]];
+      }
+    }
+    rows.push(currentRow.sort((a, b) => a.x - b.x));
+    
+    const cells = [];
+    
+    // Buscar celdas entre filas adyacentes
+    for (let r = 0; r < rows.length - 1; r++) {
+      const row1 = rows[r];
+      const row2 = rows[r + 1];
       
-      const topLeft = sorted[i];
-      
-      // Buscar esquina superior derecha (misma Y, X mayor)
-      let topRight = -1;
-      for (let j = i + 1; j < sorted.length; j++) {
-        if (Math.abs(sorted[j].y - topLeft.y) < 5 && sorted[j].x > topLeft.x + this.minCellWidth) {
-          topRight = j;
-          break;
+      // Encontrar coordenadas X comunes (líneas verticales)
+      const commonX = [];
+      for (const p1 of row1) {
+        for (const p2 of row2) {
+          if (Math.abs(p1.x - p2.x) < this.tolerance) {
+            commonX.push({ 
+              x: (p1.x + p2.x) / 2, 
+              y1: p1.y, 
+              y2: p2.y 
+            });
+          }
         }
       }
       
-      if (topRight === -1) continue;
+      // Ordenar X comunes y formar celdas
+      commonX.sort((a, b) => a.x - b.x);
       
-      // Buscar esquina inferior izquierda (misma X, Y mayor)
-      let bottomLeft = -1;
-      for (let j = i + 1; j < sorted.length; j++) {
-        if (Math.abs(sorted[j].x - topLeft.x) < 5 && sorted[j].y > topLeft.y + this.minCellHeight) {
-          bottomLeft = j;
-          break;
+      for (let c = 0; c < commonX.length - 1; c++) {
+        const v1 = commonX[c];
+        const v2 = commonX[c + 1];
+        const cellWidth = v2.x - v1.x;
+        const cellHeight = Math.abs(v2.y2 - v1.y1);
+        
+        if (cellWidth > this.minCellWidth && cellHeight > this.minCellHeight) {
+          cells.push({
+            x1: v1.x, y1: v1.y1,
+            x2: v2.x, y2: v2.y2,
+            width: cellWidth, height: cellHeight
+          });
         }
       }
-      
-      if (bottomLeft === -1) continue;
-      
-      // Buscar esquina inferior derecha
-      const bottomRightX = sorted[topRight].x;
-      const bottomRightY = sorted[bottomLeft].y;
-      
-      let bottomRight = -1;
-      for (let j = 0; j < sorted.length; j++) {
-        if (Math.abs(sorted[j].x - bottomRightX) < 5 && Math.abs(sorted[j].y - bottomRightY) < 5) {
-          bottomRight = j;
-          break;
-        }
-      }
-      
-      if (bottomRight === -1) continue;
-      
-      // Celda válida
-      cells.push({
-        x1: topLeft.x,
-        y1: topLeft.y,
-        x2: sorted[topRight].x,
-        y2: sorted[bottomLeft].y,
-        width: sorted[topRight].x - topLeft.x,
-        height: sorted[bottomLeft].y - topLeft.y
-      });
-      
-      used.add(i);
-      used.add(topRight);
-      used.add(bottomLeft);
-      used.add(bottomRight);
     }
     
     return cells;
@@ -141,149 +132,44 @@ class RadarMatcher {
   
   cellsToLines(cells, scale) {
     const lines = [];
-    
     for (const cell of cells) {
-      // Borde superior
-      lines.push({
-        x1: Math.round(cell.x1 / scale),
-        y1: Math.round(cell.y1 / scale),
-        x2: Math.round(cell.x2 / scale),
-        y2: Math.round(cell.y1 / scale),
-        angle: 0,
-        length: cell.width / scale
-      });
-      
-      // Borde inferior
-      lines.push({
-        x1: Math.round(cell.x1 / scale),
-        y1: Math.round(cell.y2 / scale),
-        x2: Math.round(cell.x2 / scale),
-        y2: Math.round(cell.y2 / scale),
-        angle: 0,
-        length: cell.width / scale
-      });
-      
-      // Borde izquierdo
-      lines.push({
-        x1: Math.round(cell.x1 / scale),
-        y1: Math.round(cell.y1 / scale),
-        x2: Math.round(cell.x1 / scale),
-        y2: Math.round(cell.y2 / scale),
-        angle: 90,
-        length: cell.height / scale
-      });
-      
-      // Borde derecho
-      lines.push({
-        x1: Math.round(cell.x2 / scale),
-        y1: Math.round(cell.y1 / scale),
-        x2: Math.round(cell.x2 / scale),
-        y2: Math.round(cell.y2 / scale),
-        angle: 90,
-        length: cell.height / scale
-      });
+      lines.push({ x1: Math.round(cell.x1/scale), y1: Math.round(cell.y1/scale), x2: Math.round(cell.x2/scale), y2: Math.round(cell.y1/scale), angle: 0, length: cell.width/scale });
+      lines.push({ x1: Math.round(cell.x1/scale), y1: Math.round(cell.y2/scale), x2: Math.round(cell.x2/scale), y2: Math.round(cell.y2/scale), angle: 0, length: cell.width/scale });
+      lines.push({ x1: Math.round(cell.x1/scale), y1: Math.round(cell.y1/scale), x2: Math.round(cell.x1/scale), y2: Math.round(cell.y2/scale), angle: 90, length: cell.height/scale });
+      lines.push({ x1: Math.round(cell.x2/scale), y1: Math.round(cell.y1/scale), x2: Math.round(cell.x2/scale), y2: Math.round(cell.y2/scale), angle: 90, length: cell.height/scale });
     }
-    
     return lines;
   }
   
   downscale(imageData, maxSize) {
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
+    const data = imageData.data, width = imageData.width, height = imageData.height;
     const scale = Math.min(1, maxSize / Math.max(width, height));
-    const nw = Math.round(width * scale);
-    const nh = Math.round(height * scale);
-    
+    const nw = Math.round(width * scale), nh = Math.round(height * scale);
     if (scale === 1) return { data: imageData, width, height, scale: 1 };
     
     const newData = new Uint8ClampedArray(nw * nh * 4);
     for (let y = 0; y < nh; y++) {
       for (let x = 0; x < nw; x++) {
-        const sx = Math.round(x / scale);
-        const sy = Math.round(y / scale);
-        const srcIdx = (sy * width + sx) * 4;
+        const srcIdx = (Math.round(y / scale) * width + Math.round(x / scale)) * 4;
         const dstIdx = (y * nw + x) * 4;
-        newData[dstIdx] = data[srcIdx];
-        newData[dstIdx + 1] = data[srcIdx + 1];
-        newData[dstIdx + 2] = data[srcIdx + 2];
-        newData[dstIdx + 3] = data[srcIdx + 3];
+        newData[dstIdx] = data[srcIdx]; newData[dstIdx+1] = data[srcIdx+1];
+        newData[dstIdx+2] = data[srcIdx+2]; newData[dstIdx+3] = data[srcIdx+3];
       }
     }
-    
     return { data: { data: newData, width: nw, height: nh }, width: nw, height: nh, scale };
   }
   
   checkDirection(data, width, startX, startY, dx, dy, maxDistance) {
     let darkCount = 0;
-    
     for (let i = 1; i <= maxDistance; i++) {
-      const x = startX + dx * i;
-      const y = startY + dy * i;
-      
+      const x = startX + dx * i, y = startY + dy * i;
       if (x < 0 || x >= width || y < 0 || y >= data.length / width) break;
-      
-      const idx = y * width + x;
-      if (data[idx] === 1) {
+      if (data[y * width + x] === 1) {
         darkCount++;
         if (darkCount >= this.threshold) return true;
       }
     }
-    
     return false;
-  }
-  
-  groupIntersections(intersections, minDistance) {
-    if (intersections.length === 0) return [];
-    
-    const cellSize = minDistance;
-    const grid = new Map();
-    
-    for (const p of intersections) {
-      const cellX = Math.floor(p.x / cellSize);
-      const cellY = Math.floor(p.y / cellSize);
-      const key = cellX + ',' + cellY;
-      
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key).push(p);
-    }
-    
-    const grouped = [];
-    const used = new Set();
-    
-    for (const [key, points] of grid.entries()) {
-      for (const p of points) {
-        if (used.has(p)) continue;
-        
-        const cluster = [p];
-        used.add(p);
-        
-        const [cx, cy] = key.split(',').map(Number);
-        for (let dx = -1; dx <= 1; dx++) {
-          for (let dy = -1; dy <= 1; dy++) {
-            const neighborKey = (cx + dx) + ',' + (cy + dy);
-            const neighborPoints = grid.get(neighborKey);
-            if (!neighborPoints) continue;
-            
-            for (const q of neighborPoints) {
-              if (used.has(q)) continue;
-              const dist = Math.sqrt((p.x - q.x) ** 2 + (p.y - q.y) ** 2);
-              if (dist < minDistance) {
-                cluster.push(q);
-                used.add(q);
-              }
-            }
-          }
-        }
-        
-        const centerX = Math.round(cluster.reduce((sum, p) => sum + p.x, 0) / cluster.length);
-        const centerY = Math.round(cluster.reduce((sum, p) => sum + p.y, 0) / cluster.length);
-        
-        grouped.push({ x: centerX, y: centerY });
-      }
-    }
-    
-    return grouped;
   }
 }
 window.RadarMatcher = RadarMatcher;
