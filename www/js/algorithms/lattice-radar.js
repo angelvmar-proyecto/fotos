@@ -1,135 +1,90 @@
 class LatticeRadar {
-  constructor() {
-    this.name = 'Lattice Radar';
-    this.color = '#FF1493';
-    this.crossThreshold = 0.90; // Aumentado de 0.70 a 0.90 (90% de cruces)
-    this.stabilityThreshold = 1.0; // Reducido de 1.5 a 1.0 (más estricto)
-    this.windowSize = 2;
-    this.numBands = 20;
-    this.minVerticalSpacing = 30; // Espaciado mínimo entre verticales
-  }
-
-  async detect(imageData) {
-    logger.info('Iniciando Lattice Radar (verificacion por cruces anclados)...');
-    const t0 = Date.now();
+  constructor(){ this.name='Lattice Radar'; this.color='#FF1493'; this.crossThreshold=0.85; this.maxStd=1.2; this.minGap=12; }
+  async detect(imageData){
+    logger.info('Iniciando Lattice Radar (cruces + espaciado regular)...');
+    const t0=Date.now();
     lineValidator.prepare(imageData);
-    const w = lineValidator.w, h = lineValidator.h, bin = lineValidator.bin;
-
-    const horizontals = this.detectHorizontals(bin, w, h);
-    logger.info('  Horizontales base: ' + horizontals.length);
-
-    if (horizontals.length < 5) {
-      logger.info('  Muy pocas horizontales, no se puede estimar reticula');
-      return { algorithm: this.name, color: this.color, lines: [], metrics: { totalLines: 0, executionTime: Date.now() - t0 } };
-    }
-
-    const yPositions = horizontals.map(l => Math.round((l.y1 + l.y2) / 2)).sort((a, b) => a - b);
-    const bandWidth = Math.ceil(w / this.numBands);
-
-    const verticals = this.findVerticals(bin, w, h, yPositions, bandWidth);
-    logger.info('  Verticales validadas por cruces: ' + verticals.length);
-
-    // Filtrar verticales demasiado cercanas
-    const filtered = this.filterCloseVerticals(verticals);
-    logger.info('  Verticales tras filtrar cercanas: ' + filtered.length);
-
-    const lines = filtered.map(x => ({ x1: x, y1: 0, x2: x, y2: h - 1, angle: 90, length: h }));
-    const time = Date.now() - t0;
-    logger.info('Lattice Radar completado en ' + time + 'ms. Lineas: ' + lines.length);
-    
-    return { 
-      algorithm: this.name, 
-      color: this.color, 
-      lines: lines, 
-      metrics: { 
-        totalLines: lines.length, 
-        executionTime: time, 
-        horizontalsUsed: horizontals.length,
-        crossThreshold: this.crossThreshold,
-        stabilityThreshold: this.stabilityThreshold
-      } 
-    };
+    const w=lineValidator.w,h=lineValidator.h,bin=lineValidator.bin;
+    const ys=this.peaks(lineValidator.rowSum,Math.max(5,Math.round(h/90)),0.35);
+    logger.info('  Horizontales base: '+ys.length);
+    if(ys.length<4)return this.empty(t0);
+    const cand=this.peaks(lineValidator.colSum,Math.max(4,Math.round(w/160)),0.20);
+    logger.info('  Candidatas verticales: '+cand.length);
+    const bands=16, bh=Math.ceil(h/bands);
+    const ok=[];
+    cand.forEach(x=>{
+      const cs=this.crossScore(bin,w,h,x,ys);
+      if(cs<this.crossThreshold)return;
+      const st=this.stability(bin,w,h,x,bands,bh);
+      if(st>this.maxStd&&cs<0.95)return;
+      ok.push({x:x,cs:cs,st:st});
+    });
+    logger.info('  Verticales validadas por cruces: '+ok.length);
+    const grid=this.regularGrid(ok);
+    logger.info('  Verticales tras filtro de rejilla: '+grid.length);
+    const y1=Math.max(0,ys[0]-2), y2=Math.min(h-1,ys[ys.length-1]+2);
+    const lines=grid.map(g=>({x1:g.x,y1:y1,x2:g.x,y2:y2,angle:90,length:y2-y1}));
+    const time=Date.now()-t0;
+    logger.info('Lattice Radar completado en '+time+'ms. Lineas: '+lines.length);
+    return {algorithm:this.name,color:this.color,lines:lines,metrics:{totalLines:lines.length,executionTime:time,hBase:ys.length}};
   }
-
-  detectHorizontals(bin, w, h) {
-    const proj = new Array(h).fill(0);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (bin[y * w + x]) proj[y]++;
-    const lines = [];
-    const threshold = Math.max(...proj) * 0.3;
-    for (let y = 1; y < h - 1; y++) {
-      if (proj[y] > threshold && proj[y] >= proj[y-1] && proj[y] >= proj[y+1]) {
-        let tooClose = false;
-        for (const l of lines) if (Math.abs(l.y1 - y) < 10) { tooClose = true; break; }
-        if (!tooClose) lines.push({ x1: 0, y1: y, x2: w - 1, y2: y });
+  empty(t0){ return {algorithm:this.name,color:this.color,lines:[],metrics:{totalLines:0,executionTime:Date.now()-t0}}; }
+  peaks(arr,minDist,ratio){
+    const mx=Math.max(...arr); if(mx<=0)return [];
+    const sorted=[...arr].sort((a,b)=>a-b), med=sorted[Math.floor(arr.length/2)];
+    const th=med+(mx-med)*ratio; const out=[];
+    for(let i=1;i<arr.length-1;i++){
+      if(arr[i]>th&&arr[i]>=arr[i-1]&&arr[i]>=arr[i+1]){
+        let close=false;
+        for(let j=0;j<out.length;j++){if(Math.abs(out[j]-i)<minDist){if(arr[i]>arr[out[j]])out[j]=i;close=true;break;}}
+        if(!close)out.push(i);
       }
     }
-    return lines;
+    return out.sort((a,b)=>a-b);
   }
-
-  findVerticals(bin, w, h, yPositions, bandWidth) {
-    const vProj = new Array(w).fill(0);
-    for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (bin[y * w + x]) vProj[x]++;
-    const vThreshold = Math.max(...vProj) * 0.15;
-    const candidates = [];
-    for (let x = 1; x < w - 1; x++) {
-      if (vProj[x] > vThreshold && vProj[x] >= vProj[x-1] && vProj[x] >= vProj[x+1]) candidates.push(x);
-    }
-    logger.info('  Candidatas verticales: ' + candidates.length);
-
-    const valid = [];
-    for (const x of candidates) {
-      const crossScore = this.testCrosses(bin, w, x, yPositions);
-      const stability = this.testStability(bin, w, h, x, bandWidth);
-      if (crossScore >= this.crossThreshold && stability <= this.stabilityThreshold) valid.push(x);
-    }
-    return valid;
-  }
-
-  testCrosses(bin, w, x, yPositions) {
-    let hits = 0;
-    for (const y of yPositions) {
-      let found = false;
-      for (let dy = -this.windowSize; dy <= this.windowSize && !found; dy++) {
-        for (let dx = -this.windowSize; dx <= this.windowSize && !found; dx++) {
-          const xx = x + dx, yy = y + dy;
-          if (xx >= 0 && xx < w && yy >= 0 && yy < bin.length / w && bin[yy * w + xx]) found = true;
-        }
+  crossScore(bin,w,h,x,ys){
+    let hit=0;
+    for(const y of ys){
+      let f=false;
+      for(let dy=-2;dy<=2&&!f;dy++)for(let dx=-2;dx<=2&&!f;dx++){
+        const xx=x+dx,yy=y+dy;
+        if(xx>=0&&xx<w&&yy>=0&&yy<h&&bin[yy*w+xx])f=true;
       }
-      if (found) hits++;
+      if(f)hit++;
     }
-    return hits / yPositions.length;
+    return hit/ys.length;
   }
-
-  testStability(bin, w, h, x, bandWidth) {
-    const xPositions = [];
-    for (let band = 0; band < this.numBands; band++) {
-      const bandStart = band * bandWidth;
-      const bandEnd = Math.min((band + 1) * bandWidth, w);
-      let bestX = x, bestCount = 0;
-      for (let xx = Math.max(bandStart, x - 10); xx <= Math.min(bandEnd - 1, x + 10); xx++) {
-        let count = 0;
-        for (let y = 0; y < h; y++) if (bin[y * w + xx]) count++;
-        if (count > bestCount) { bestCount = count; bestX = xx; }
+  stability(bin,w,h,x,bands,bh){
+    const ps=[];
+    for(let b=0;b<bands;b++){
+      const y0=b*bh,y1=Math.min(h,(b+1)*bh); if(y1-y0<5)continue;
+      let bx=x,bc=-1;
+      for(let xx=Math.max(0,x-6);xx<=Math.min(w-1,x+6);xx++){
+        let c=0; for(let y=y0;y<y1;y++)if(bin[y*w+xx])c++;
+        if(c>bc){bc=c;bx=xx;}
       }
-      xPositions.push(bestX);
+      ps.push(bx);
     }
-    const mean = xPositions.reduce((a, b) => a + b, 0) / xPositions.length;
-    const variance = xPositions.reduce((s, xi) => s + (xi - mean) ** 2, 0) / xPositions.length;
-    return Math.sqrt(variance);
+    if(ps.length<3)return 99;
+    const m=ps.reduce((a,b)=>a+b,0)/ps.length;
+    return Math.sqrt(ps.reduce((s,v)=>s+(v-m)*(v-m),0)/ps.length);
   }
-
-  filterCloseVerticals(verticals) {
-    if (verticals.length === 0) return [];
-    const sorted = [...verticals].sort((a, b) => a - b);
-    const filtered = [sorted[0]];
-    
-    for (let i = 1; i < sorted.length; i++) {
-      const lastX = filtered[filtered.length - 1];
-      if (sorted[i] - lastX >= this.minVerticalSpacing) {
-        filtered.push(sorted[i]);
-      }
-    }
-    return filtered;
+  regularGrid(cands){
+    if(cands.length<3)return cands.map(c=>({x:c.x}));
+    const xs=cands.map(c=>c.x).sort((a,b)=>a-b);
+    const gaps=[]; for(let i=1;i<xs.length;i++)gaps.push(xs[i]-xs[i-1]);
+    const sg=[...gaps].sort((a,b)=>a-b);
+    const step=sg[Math.floor(sg.length/2)];
+    if(!step||step<this.minGap)return cands.filter(c=>c.cs>=0.95).map(c=>({x:c.x}));
+    const buckets=new Map();
+    cands.forEach(c=>{
+      const k=Math.round(c.x/step);
+      if(!buckets.has(k)||buckets.get(k).cs<c.cs)buckets.set(k,c);
+    });
+    const kept=[...buckets.values()].sort((a,b)=>a.x-b.x);
+    const out=[];
+    kept.forEach(c=>{ if(!out.length||c.x-out[out.length-1].x>=this.minGap)out.push({x:c.x}); });
+    return out;
   }
 }
-window.LatticeRadar = LatticeRadar;
+window.LatticeRadar=LatticeRadar;

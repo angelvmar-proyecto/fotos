@@ -1,227 +1,97 @@
 class AdaptiveDiagnosis {
-  constructor() {
-    this.history = [];
-    this.currentParams = {
-      sensitivity: 1.0,
-      mergeThreshold: 5,
-      minLength: 20
-    };
-  }
-  
-  analyze(results, imageData) {
-    if (results.length === 0) return { best: 'Ninguno', reasons: ['Sin resultados'], ranking: [] };
-    
-    logger.info('=== DIAGNÓSTICO AUTO-AJUSTABLE ===');
-    
-    const width = imageData.width;
-    const height = imageData.height;
-    
-    const scores = results.map(result => {
-      const lines = result.lines;
-      const metrics = result.metrics;
-      
-      const horizontal = lines.filter(l => l.angle < 45 || l.angle > 135);
-      const vertical = lines.filter(l => l.angle >= 45 && l.angle <= 135);
-      
-      const regularity = this.calculateRegularity(horizontal, vertical);
-      const intersections = this.calculateIntersections(horizontal, vertical);
-      const coverage = this.calculateCoverage(lines, width, height);
-      const consistency = this.calculateLengthConsistency(horizontal, vertical);
-      const orthogonality = this.calculateOrthogonality(horizontal, vertical);
-      const speed = 1 - Math.min(metrics.executionTime / 5000, 1);
-      
-      const score = (
-        regularity * 0.25 +
-        intersections * 0.25 +
-        coverage * 0.15 +
-        consistency * 0.15 +
-        orthogonality * 0.10 +
-        speed * 0.10
-      );
-      
-      logger.info(`${result.algorithm}: Score=${score.toFixed(3)}`);
-      logger.info(`  Regularidad=${regularity.toFixed(2)} Intersecciones=${intersections.toFixed(2)} Cobertura=${coverage.toFixed(2)}`);
-      logger.info(`  Consistencia=${consistency.toFixed(2)} Ortogonalidad=${orthogonality.toFixed(2)} Velocidad=${speed.toFixed(2)}`);
-      
-      return {
-        algorithm: result.algorithm,
-        score: score,
-        metrics: metrics,
-        details: { regularity, intersections, coverage, consistency, orthogonality, speed }
-      };
+  constructor(){ this.history=[]; this.complements=['Lattice Radar']; }
+  axisOf(l){ return Math.abs(l.x2-l.x1)>=Math.abs(l.y2-l.y1)?'h':'v'; }
+  posOf(l,a){ return a==='h'?(l.y1+l.y2)/2:(l.x1+l.x2)/2; }
+  dedupe(lines){
+    const out=[];
+    const groups={h:[],v:[]};
+    lines.forEach(l=>{const a=this.axisOf(l);groups[a].push({l:a==='h'?0:90,x1:l.x1,y1:l.y1,x2:l.x2,y2:l.y2,pos:this.posOf(l,a)});});
+    let dups=0;
+    ['h','v'].forEach(a=>{
+      const arr=groups[a].sort((p,q)=>p.pos-q.pos);
+      arr.forEach(c=>{
+        const prev=out.filter(o=>o.l===c.l).slice(-1)[0];
+        if(prev&&Math.abs(prev.pos-c.pos)<4){dups++;return;}
+        out.push(c);
+      });
     });
-    
-    scores.sort((a, b) => b.score - a.score);
-    const best = scores[0];
-    
-    this.history.push({
-      algorithm: best.algorithm,
-      score: best.score,
-      lines: best.metrics.totalLines,
-      timestamp: Date.now()
-    });
-    
-    const adjustments = this.suggestAdjustments(best, scores);
-    
-    const reasons = [
-      `Score: ${best.score.toFixed(3)}`,
-      `Detectó ${best.metrics.totalLines} líneas`,
-      `Tiempo: ${best.metrics.executionTime}ms`
-    ];
-    
-    if (adjustments.length > 0) {
-      reasons.push('⚙️ Ajustes sugeridos:');
-      adjustments.forEach(a => reasons.push(`  ${a}`));
-    }
-    
-    logger.info(`🏆 Mejor: ${best.algorithm} (${best.score.toFixed(3)})`);
-    
-    return {
-      best: best.algorithm,
-      reasons: reasons,
-      ranking: scores,
-      adjustments: adjustments
-    };
+    return {lines:out,dups:dups};
   }
-  
-  calculateRegularity(horizontal, vertical) {
-    if (horizontal.length < 3 && vertical.length < 3) return 0;
-    
-    let hReg = 0, vReg = 0;
-    
-    if (horizontal.length >= 3) {
-      const sorted = horizontal.map(l => l.y1).sort((a, b) => a - b);
-      const gaps = [];
-      for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i-1]);
-      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-      if (mean > 0) {
-        const variance = gaps.reduce((sum, g) => sum + (g - mean) ** 2, 0) / gaps.length;
-        hReg = 1 - Math.min(Math.sqrt(variance) / mean, 1);
-      }
-    }
-    
-    if (vertical.length >= 3) {
-      const sorted = vertical.map(l => l.x1).sort((a, b) => a - b);
-      const gaps = [];
-      for (let i = 1; i < sorted.length; i++) gaps.push(sorted[i] - sorted[i-1]);
-      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-      if (mean > 0) {
-        const variance = gaps.reduce((sum, g) => sum + (g - mean) ** 2, 0) / gaps.length;
-        vReg = 1 - Math.min(Math.sqrt(variance) / mean, 1);
-      }
-    }
-    
-    return (hReg + vReg) / 2;
+  offsetOf(c,W,H){
+    try{
+      const arr=c.l==='h'?lineValidator.rowSum:lineValidator.colSum;
+      if(!arr)return 0;
+      const p=Math.round(c.pos); let best=p,bv=-1;
+      for(let k=-8;k<=8;k++){const j=p+k;if(j>=0&&j<arr.length&&arr[j]>bv){bv=arr[j];best=j;}}
+      return Math.abs(best-p);
+    }catch(e){return 0;}
   }
-  
-  calculateIntersections(horizontal, vertical) {
-    if (horizontal.length === 0 || vertical.length === 0) return 0;
-    
-    let valid = 0;
-    const total = horizontal.length * vertical.length;
-    
-    for (const h of horizontal) {
-      for (const v of vertical) {
-        const minX = Math.min(h.x1, h.x2);
-        const maxX = Math.max(h.x1, h.x2);
-        const vMinY = Math.min(v.y1, v.y2);
-        const vMaxY = Math.max(v.y1, v.y2);
-        
-        if (v.x1 >= minX && v.x1 <= maxX && h.y1 >= vMinY && h.y1 <= vMaxY) {
-          valid++;
+  evidenceOf(c){
+    try{
+      if(!lineValidator.bin)return 1;
+      const m=lineValidator.measureLine(c);
+      return Math.max(0,Math.min(1,m.coverage));
+    }catch(e){return 1;}
+  }
+  analyze(results,imageData){
+    const W=imageData.width,H=imageData.height;
+    try{lineValidator.prepare(imageData);}catch(e){}
+    const pre=results.map(r=>{const d=this.dedupe(r.lines||[]);return {r:r,lines:d.lines,dups:d.dups};});
+    const counts=pre.map(p=>p.lines.length).filter(n=>n>0).sort((a,b)=>a-b);
+    const ref=counts.length?counts[Math.min(counts.length-1,Math.floor(counts.length*0.75))]:0;
+    logger.info('=== DIAGNOSTICO DE CALIDAD VISUAL (sin velocidad) ===');
+    logger.info('  Referencia de completitud: '+ref+' lineas');
+    const ranking=pre.map(p=>{
+      const L=p.lines, n=L.length;
+      const hs=L.filter(c=>c.l==='h'), vs=L.filter(c=>c.l==='v');
+      let evid=0,ghosts=0,offs=0,supported=0;
+      L.forEach(c=>{
+        c.ev=this.evidenceOf(c); c.off=this.offsetOf(c,W,H);
+        evid+=c.ev; offs+=c.off;
+        let cross=0;
+        if(c.l==='h'){
+          vs.forEach(v=>{const x=(v.x1+v.x2)/2,y1=Math.min(v.y1,v.y2)-3,y2=Math.max(v.y1,v.y2)+3;
+            if(x>=Math.min(c.x1,c.x2)-3&&x<=Math.max(c.x1,c.x2)+3&&c.pos>=y1&&c.pos<=y2)cross++;});
+        }else{
+          hs.forEach(q=>{const y=(q.y1+q.y2)/2,x1=Math.min(q.x1,q.x2)-3,x2=Math.max(q.x1,q.x2)+3;
+            if(y>=Math.min(c.y1,c.y2)-3&&y<=Math.max(c.y1,c.y2)+3&&c.pos>=x1&&c.pos<=x2)cross++;});
         }
-      }
+        c.cross=cross;
+        if(cross>=2)supported++;
+        if(c.ev<0.25||(cross===0&&c.ev<0.55))ghosts++;
+      });
+      const evidence=n?evid/n:0;
+      const ghostRatio=n?ghosts/n:1;
+      const support=n?supported/n:0;
+      const meanOff=n?offs/n:8;
+      const align=Math.max(0,1-meanOff/6);
+      const complete=ref?Math.min(1,n/ref):0;
+      const excess=ref?Math.max(0,(n-ref*1.35)/ref):0;
+      const dupRatio=(n+p.dups)?p.dups/(n+p.dups):0;
+      let score=0.30*evidence+0.22*support+0.18*align+0.17*complete+0.13*(1-ghostRatio);
+      score-=0.30*excess+0.08*dupRatio;
+      if(n<3)score*=0.35;
+      score=Math.max(0,Math.min(1,score));
+      const m=Object.assign({},p.r.metrics,{totalLines:n,hCount:hs.length,vCount:vs.length,ghosts:ghosts,meanOffset:meanOff.toFixed(1)});
+      logger.info(p.r.algorithm+': Score='+score.toFixed(3)+(this.complements.indexOf(p.r.algorithm)>=0?' (complemento)':''));
+      logger.info('  Evidencia='+evidence.toFixed(2)+' Soporte='+support.toFixed(2)+' Alineacion='+align.toFixed(2)+' Completitud='+complete.toFixed(2));
+      logger.info('  Fantasmas='+ghosts+'/'+n+' Desfase medio='+meanOff.toFixed(1)+'px Duplicadas='+p.dups+' H='+hs.length+' V='+vs.length);
+      return {algorithm:p.r.algorithm,score:score,metrics:m,lines:L,ghosts:ghosts,excess:excess,result:p.r};
+    });
+    const compete=ranking.filter(x=>this.complements.indexOf(x.algorithm)<0);
+    compete.sort((a,b)=>b.score-a.score);
+    ranking.sort((a,b)=>b.score-a.score);
+    const best=compete[0]||ranking[0];
+    const reasons=[];
+    if(best){
+      reasons.push('Evidencia real de linea: '+(best.metrics.totalLines-best.ghosts)+' de '+best.metrics.totalLines);
+      reasons.push('Desfase medio: '+best.metrics.meanOffset+'px');
+      reasons.push('Rejilla: '+best.metrics.hCount+'H / '+best.metrics.vCount+'V');
+      if(best.ghosts>0)reasons.push('Fantasmas detectados: '+best.ghosts);
     }
-    
-    return valid / total;
-  }
-  
-  calculateCoverage(lines, width, height) {
-    if (lines.length === 0) return 0;
-    
-    const horizontal = lines.filter(l => l.angle < 45 || l.angle > 135);
-    const vertical = lines.filter(l => l.angle >= 45 && l.angle <= 135);
-    
-    if (horizontal.length === 0 || vertical.length === 0) return 0;
-    
-    const hPositions = horizontal.map(l => l.y1).sort((a, b) => a - b);
-    const vPositions = vertical.map(l => l.x1).sort((a, b) => a - b);
-    
-    const tableHeight = hPositions[hPositions.length - 1] - hPositions[0];
-    const tableWidth = vPositions[vPositions.length - 1] - vPositions[0];
-    
-    const coverageRatio = (tableHeight * tableWidth) / (width * height);
-    
-    return Math.min(coverageRatio * 2, 1);
-  }
-  
-  calculateLengthConsistency(horizontal, vertical) {
-    let hCons = 0, vCons = 0;
-    
-    if (horizontal.length >= 2) {
-      const lengths = horizontal.map(l => l.length);
-      const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
-      if (mean > 0) {
-        const variance = lengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / lengths.length;
-        hCons = 1 - Math.min(Math.sqrt(variance) / mean, 1);
-      }
-    }
-    
-    if (vertical.length >= 2) {
-      const lengths = vertical.map(l => l.length);
-      const mean = lengths.reduce((a, b) => a + b, 0) / lengths.length;
-      if (mean > 0) {
-        const variance = lengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / lengths.length;
-        vCons = 1 - Math.min(Math.sqrt(variance) / mean, 1);
-      }
-    }
-    
-    return (hCons + vCons) / 2;
-  }
-  
-  calculateOrthogonality(horizontal, vertical) {
-    if (horizontal.length < 2 || vertical.length < 2) return 0.5;
-    
-    let totalDev = 0, count = 0;
-    
-    for (const h of horizontal) {
-      const hAngle = h.angle < 90 ? h.angle : h.angle - 180;
-      for (const v of vertical) {
-        totalDev += Math.abs(Math.abs(hAngle - v.angle) - 90);
-        count++;
-      }
-    }
-    
-    return 1 - Math.min(totalDev / count / 15, 1);
-  }
-  
-  suggestAdjustments(best, allScores) {
-    const suggestions = [];
-    
-    if (best.details.regularity < 0.3) {
-      suggestions.push('Aumentar mergeThreshold para reducir ruido');
-    }
-    
-    if (best.details.intersections < 0.5) {
-      suggestions.push('Verificar ortogonalidad de líneas detectadas');
-    }
-    
-    if (best.details.coverage < 0.3) {
-      suggestions.push('Reducir minLength para detectar líneas más cortas');
-    }
-    
-    if (best.score < 0.5) {
-      suggestions.push('Score bajo - considerar ajustar sensibilidad del algoritmo');
-    }
-    
-    if (this.history.length >= 3) {
-      const recentScores = this.history.slice(-3).map(h => h.score);
-      const avg = recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
-      if (avg < 0.4) {
-        suggestions.push('Tendencia de scores bajos - revisar parámetros globales');
-      }
-    }
-    
-    return suggestions;
+    logger.info('🏆 Mejor: '+(best?best.algorithm+' ('+best.score.toFixed(3)+')':'n/a'));
+    this.history.push({best:best?best.algorithm:null,score:best?best.score:0});
+    return {best:best?best.best||best.algorithm:null,reasons:reasons,ranking:ranking,bestLines:best?best.lines:[]};
   }
 }
+window.AdaptiveDiagnosis=AdaptiveDiagnosis;
