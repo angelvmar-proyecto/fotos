@@ -43,13 +43,13 @@ class AdaptiveDiagnosis {
     logger.info('  Referencia de completitud: '+ref+' lineas');
     const ranking=pre.map(p=>{
       const L=p.lines, n=L.length;
-      const hs=L.filter(c=>c.l==='h'), vs=L.filter(c=>c.l==='v');
+      const hs=L.filter(c=>Math.abs(c.angle||0)<45||Math.abs(c.angle||0)>135), vs=L.filter(c=>Math.abs((c.angle||0)-90)<=45);
       let evid=0,ghosts=0,offs=0,supported=0;
       L.forEach(c=>{
         c.ev=this.evidenceOf(c); c.off=this.offsetOf(c,W,H);
         evid+=c.ev; offs+=c.off;
         let cross=0;
-        if(c.l==='h'){
+        if(Math.abs(c.angle||0)<45||Math.abs(c.angle||0)>135){
           vs.forEach(v=>{const x=(v.x1+v.x2)/2,y1=Math.min(v.y1,v.y2)-3,y2=Math.max(v.y1,v.y2)+3;
             if(x>=Math.min(c.x1,c.x2)-3&&x<=Math.max(c.x1,c.x2)+3&&c.pos>=y1&&c.pos<=y2)cross++;});
         }else{

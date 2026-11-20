@@ -291,8 +291,8 @@ function drawLayer(name,lines,color){
 }
 function buildCombined(dg){
   if(!dg||!dg.bestLines||!dg.bestLines.length)return;
-  var bestName=dg.ranking.filter(function(r){return r.algorithm!=='Lattice Radar';})[0];
-  var lat=algorithmResults.find(function(r){return r.algorithm==='Lattice Radar';});
+  var bestName=dg.ranking.filter(function(r){return r.algorithm!=="Lattice Radar";})[0];
+  var lat=algorithmResults.find(function(r){return r.algorithm==="Lattice Radar";});
   if(!bestName||!lat)return;
   var merged=bestName.lines.map(function(l){return {x1:l.x1,y1:l.y1,x2:l.x2,y2:l.y2,angle:l.angle};});
   var added=0;
@@ -302,8 +302,10 @@ function buildCombined(dg){
     if(!dup){merged.push({x1:v.x1,y1:v.y1,x2:v.x2,y2:v.y2,angle:90});added++;}
   });
   if(added>0){
-    drawLayer('Combinado ('+bestName.algorithm+' + Lattice)',merged,'#00FF9C');
-    logger.info('Capa Combinada: '+merged.length+' lineas (+'+added+' verticales de Lattice)');
+    var combinedResult={algorithm:"Combinado",color:"#00FF9C",lines:merged,metrics:{totalLines:merged.length,executionTime:0,ghosts:0}};
+    algorithmResults.push(combinedResult);
+    drawLayer(combinedResult.algorithm,merged,combinedResult.color);
+    logger.info("Capa Combinada: "+merged.length+" lineas (+"+added+" verticales de Lattice)");
   }
 }
 function showDiagnosis(d){
