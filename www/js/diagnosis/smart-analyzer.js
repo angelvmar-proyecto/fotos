@@ -91,8 +91,8 @@ class SmartAnalyzer {
     logger.info('Brillo promedio: ' + this.imageProfile.meanGray + (isDark ? ' (OSCURA)' : ' (CLARA)'));
     logger.info('Contraste: ' + contrast);
     logger.info('Densidad de bordes: ' + this.imageProfile.edgeDensity + '%');
-    logger.info('Lineas horizontales detectadas: ' + hPeaks);
-    logger.info('Lineas verticales detectadas: ' + vPeaks);
+    logger.info('Lineas horizontales estimadas: ' + hPeaks);
+    logger.info('Lineas verticales estimadas: ' + vPeaks);
     logger.info('Grosor promedio de linea: ' + this.imageProfile.avgLineThickness + 'px');
     logger.info('Inclinacion estimada: ' + this.imageProfile.skewAngle + ' grados');
     logger.info('Tipo de imagen: ' + imageType);
@@ -102,16 +102,19 @@ class SmartAnalyzer {
   }
 
   countPeaks(projection, minDistance) {
+    // CORREGIDO: Ahora busca MAXIMOS locales (picos = líneas reales)
+    // Antes buscaba minimos (espacios entre líneas)
     const peaks = [];
-    const min = Math.min(...projection);
     const max = Math.max(...projection);
-    const threshold = min + (max - min) * 0.3;
+    const threshold = max * 0.4; // 40% del máximo = umbral para considerar "pico de línea"
 
     for (let i = 1; i < projection.length - 1; i++) {
-      if (projection[i] < threshold && 
-          projection[i] < projection[i-1] && 
-          projection[i] < projection[i+1]) {
+      // Buscar MÁXIMO local: valor mayor que sus vecinos Y por encima del umbral
+      if (projection[i] > threshold && 
+          projection[i] >= projection[i-1] && 
+          projection[i] >= projection[i+1]) {
         
+        // Verificar que no esté demasiado cerca de otro pico
         let tooClose = false;
         for (const p of peaks) {
           if (Math.abs(p - i) < minDistance) {
@@ -129,9 +132,8 @@ class SmartAnalyzer {
     const widths = [];
     
     [hProj, vProj].forEach(proj => {
-      const min = Math.min(...proj);
       const max = Math.max(...proj);
-      const threshold = min + (max - min) * 0.7; // Umbral alto para detectar PICOS (líneas)
+      const threshold = max * 0.7; // 70% del máximo para detectar PICOS (líneas)
       
       let inPeak = false;
       let peakStart = 0;
