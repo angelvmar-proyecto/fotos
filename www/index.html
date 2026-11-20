@@ -2,133 +2,53 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detectores de Líneas de Tabla</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detectores de Tablas</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
-        }
-        .panel {
-            background-color: #2a2a2a;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-        }
-        .canvas-container {
-            position: relative;
-            display: inline-block;
-            border: 2px solid #444;
-            margin: 10px 0;
-        }
-        #mainCanvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
-        }
-        .canvas-controls {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .checkbox-item {
-            margin: 8px 0;
-            padding: 8px;
-            background-color: #333;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .checkbox-item div {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .color-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        button {
-            padding: 8px 16px;
-            margin: 5px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background-color: #4a4a4a;
-            color: #e0e0e0;
-        }
-        button:hover {
-            background-color: #5a5a5a;
-        }
-        .btn-optimize {
-            padding: 4px 8px;
-            font-size: 12px;
-            background-color: #3a5a3a;
-        }
-        .btn-optimize:hover {
-            background-color: #4a6a4a;
-        }
-        #logContainer {
-            background-color: #1a1a1a;
-            padding: 10px;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-        }
-        #statusIndicator {
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #2a4a2a;
-            border-radius: 4px;
-            display: none;
-        }
-        #analysisBox, #diagnosisBox {
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #2a3a4a;
-            border-radius: 4px;
-            display: none;
-        }
-        .layer-toggle {
-            display: inline-block;
-            margin: 5px;
-            padding: 5px 10px;
-            background-color: #3a3a3a;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .layer-toggle.inactive {
-            opacity: 0.5;
-        }
+        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 15px; margin: 0; }
+        .panel { background: #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        h2 { text-align: center; color: #4CAF50; margin-bottom: 20px; }
+        h3 { color: #4CAF50; margin-top: 0; }
+        button { background: #4CAF50; color: white; border: none; padding: 12px 20px; border-radius: 6px; margin: 5px; cursor: pointer; font-size: 14px; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .btn-secondary { background: #2196F3; }
+        .btn-danger { background: #f44336; }
+        .btn-optimize { background: #FF9800; padding: 6px 12px; font-size: 12px; margin-left: 10px; }
+        #canvasContainer { position: relative; width: 100%; height: 420px; background: #000; border: 2px solid #444; margin-bottom: 15px; overflow: hidden; }
+        #mainCanvas { display: block; touch-action: none; }
+        .canvas-controls { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10; }
+        .canvas-controls button { padding: 8px 12px; font-size: 16px; background: rgba(76, 175, 80, 0.9); margin: 0; }
+        .log-container { max-height: 320px; overflow-y: auto; background: #111; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 4px; }
+        .checkbox-item { margin: 8px 0; padding: 10px; background: #333; border-radius: 4px; display: flex; align-items: center; justify-content: space-between; }
+        .checkbox-item input { margin-right: 10px; width: 18px; height: 18px; vertical-align: middle; }
+        .checkbox-item label { cursor: pointer; flex: 1; }
+        .color-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+        #statusIndicator { display: none; padding: 12px; background: #333; border-radius: 6px; margin: 10px 0; text-align: center; font-weight: bold; color: #4CAF50; }
+        .layer-toggle { display: inline-block; padding: 8px 12px; margin: 5px; background: #333; border-radius: 4px; cursor: pointer; }
+        .layer-toggle.inactive { opacity: 0.35; }
+        #diagnosisBox { background: #333; border-left: 4px solid #FFD700; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 14px; line-height: 1.6; }
+        #analysisBox { background: #1e3a5f; border-left: 4px solid #2196F3; padding: 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
     </style>
 </head>
 <body>
-    <h1>Detectores de Líneas de Tabla</h1>
-    
+    <h2>🔍 Detectores de Tablas</h2>
     <div class="panel">
-        <h3>Imagen</h3>
-        <input type="file" id="imageInput" accept="image/*">
-        <div class="canvas-container">
+        <button onclick="document.getElementById('imageInput').click()">📷 Seleccionar Imagen</button>
+        <input type="file" id="imageInput" accept="image/*" style="display: none;">
+        <span id="imgInfo" style="margin-left:10px; color:#999;"></span>
+    </div>
+    <div class="panel" id="vizPanel">
+        <h3>🎨 Visualización (pellizca para zoom)</h3>
+        <div id="canvasContainer">
             <canvas id="mainCanvas"></canvas>
             <div class="canvas-controls">
-                <button onclick="canvasManager.zoomIn()">+</button>
-                <button onclick="canvasManager.zoomOut()">-</button>
-                <button onclick="canvasManager.reset()">Reset</button>
+                <button onclick="canvasManager.zoomIn()">➕</button>
+                <button onclick="canvasManager.zoomOut()">➖</button>
+                <button onclick="canvasManager.reset()">🔄</button>
             </div>
         </div>
         <div id="layerControls"></div>
     </div>
-
     <div class="panel">
         <h3>⚙️ Algoritmos (6 disponibles)</h3>
         <div class="checkbox-item">
@@ -179,23 +99,23 @@
             </div>
             <button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧 Optimizar</button>
         </div>
-        <button onclick="selectAll()">Seleccionar Todos</button>
-        <button onclick="deselectAll()">Deseleccionar Todos</button>
-        <button onclick="applySmartSelection()">🧠 Selección Inteligente</button>
-        <button onclick="runAlgorithms()">🚀 Ejecutar</button>
-        <button onclick="cancelExecution()" id="cancelButton" style="display:none;">⏹️ Cancelar</button>
+        <br>
+        <button onclick="selectAll()">✅ Todos</button>
+        <button onclick="deselectAll()">❌ Ninguno</button>
+        <button onclick="applySmartSelection()" class="btn-secondary">🧠 Selección Inteligente</button>
+        <br><br>
+        <button onclick="runAlgorithms()" id="runButton" disabled>🚀 Ejecutar</button>
+        <button onclick="cancelExecution()" id="cancelButton" class="btn-danger" style="display:none;">⏹️ Cancelar</button>
         <div id="statusIndicator"></div>
-        <div id="analysisBox"></div>
-        <div id="diagnosisBox"></div>
+        <div id="analysisBox" style="display:none;"></div>
+        <div id="diagnosisBox" style="display:none;"></div>
     </div>
-
     <div class="panel">
         <h3>📝 Log</h3>
-        <button onclick="copyLog()">📋 Copiar Log</button>
-        <button onclick="clearLog()">🗑️ Limpiar Log</button>
-        <div id="logContainer"></div>
+        <button class="btn-secondary" onclick="copyLog()">📋 Copiar Log</button>
+        <button class="btn-secondary" onclick="clearLog()">🗑️ Limpiar Log</button>
+        <div class="log-container" id="logContainer"></div>
     </div>
-
     <script src="js/utils/logger.js"></script>
     <script src="js/utils/image-processor.js"></script>
     <script src="js/utils/preprocessor.js"></script>
@@ -211,14 +131,10 @@
     <script src="js/runner.js"></script>
     <script src="js/diagnosis/adaptive-diagnosis.js"></script>
     <script src="js/diagnosis/smart-analyzer.js"></script>
-
     <script>
         let canvasManager, runner, selector, smartAnalyzer, currentImageData = null;
-        let isRunning = false;
-        let cancelRequested = false;
-        let algorithmResults = [];
-        let algorithmInstances = {};
-
+        let isRunning = false, cancelRequested = false, algorithmResults = [];
+        let algorithmInstances = {}, currentImageProfile = null;
         function initApp() {
             logger.info("Iniciando aplicacion...");
             try {
@@ -226,7 +142,6 @@
                 runner = new AlgorithmRunner();
                 selector = new AdaptiveDiagnosis();
                 smartAnalyzer = new SmartAnalyzer();
-
                 algorithmInstances = {
                     profile: new ProfileProjection(),
                     morph: new Morphological(),
@@ -235,314 +150,145 @@
                     lattice: new LatticeRadar(),
                     fourier: new FourierAnalysis()
                 };
-
                 Object.values(algorithmInstances).forEach(algo => runner.registerAlgorithm(algo));
-
                 document.getElementById('imageInput').addEventListener('change', handleImageLoad);
                 logger.info("Aplicacion lista. 6 algoritmos registrados.");
-            } catch (e) {
-                alert("ERROR: " + e.message);
-                logger.error(e.message);
-            }
+            } catch (e) { alert("ERROR: " + e.message); logger.error(e.message); }
         }
-
         function applySmartSelection() {
-            if (!currentImageData) {
-                alert("Primero carga una imagen");
-                return;
-            }
-
+            if (!currentImageData) { alert("Primero carga una imagen"); return; }
             logger.info('=== ANÁLISIS INTELIGENTE DE IMAGEN ===');
             currentImageProfile = smartAnalyzer.analyzeImage(currentImageData);
             const suggestions = smartAnalyzer.getRecommendation();
-
             document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
-
             const allAlgos = Object.values(algorithmInstances);
             suggestions.primary.forEach(name => {
                 const algo = allAlgos.find(a => a.name === name);
-                if (algo) {
-                    const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
-                    if (key) {
-                        document.getElementById('algo_' + key).checked = true;
-                    }
-                }
+                if (algo) { const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo); if (key) document.getElementById('algo_' + key).checked = true; }
             });
-
             suggestions.secondary.forEach(name => {
                 const algo = allAlgos.find(a => a.name === name);
-                if (algo) {
-                    const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo);
-                    if (key) {
-                        document.getElementById('algo_' + key).checked = true;
-                    }
-                }
+                if (algo) { const key = Object.keys(algorithmInstances).find(k => algorithmInstances[k] === algo); if (key) document.getElementById('algo_' + key).checked = true; }
             });
-
             Object.entries(suggestions.params).forEach(([algoName, params]) => {
                 if (algoName === 'deskew') return;
                 const algo = allAlgos.find(a => a.name === algoName);
-                if (algo) {
-                    Object.entries(params).forEach(([param, value]) => {
-                        if (algo[param] !== undefined) {
-                            algo[param] = value;
-                            logger.info('  ' + algoName + '.' + param + ' = ' + value);
-                        }
-                    });
-                }
+                if (algo) { Object.entries(params).forEach(([param, value]) => { if (algo[param] !== undefined) { algo[param] = value; logger.info('  ' + algoName + '.' + param + ' = ' + value); } }); }
             });
-
             showAnalysis(currentImageProfile, suggestions);
             logger.info('Selección inteligente aplicada');
         }
-
         function showAnalysis(profile, suggestions) {
             const box = document.getElementById('analysisBox');
-            let html = '<strong>🧠 ANÁLISIS DE IMAGEN</strong><br>';
+            let html = '<strong style="color:#2196F3;">🧠 ANÁLISIS DE IMAGEN</strong><br>';
             html += '<strong>Tipo:</strong> ' + profile.imageType + '<br>';
             html += '<strong>Brillo:</strong> ' + profile.meanGray + (profile.isDark ? ' (oscura)' : ' (clara)') + '<br>';
             html += '<strong>Densidad bordes:</strong> ' + profile.edgeDensity + '%<br>';
             html += '<strong>Líneas detectadas:</strong> ' + profile.hPeaks + 'H / ' + profile.vPeaks + 'V<br>';
             html += '<strong>Grosor promedio:</strong> ' + profile.avgLineThickness + 'px<br>';
-            
-            if (suggestions.primary.length > 0) {
-                html += '<br><strong>🎯 Algoritmos recomendados:</strong><br>';
-                html += suggestions.primary.map(a => '• ' + a).join('<br>');
-            }
-
-            box.innerHTML = html;
-            box.style.display = 'block';
+            if (suggestions.primary.length > 0) { html += '<br><strong>🎯 Algoritmos recomendados:</strong><br>'; html += suggestions.primary.map(a => '• ' + a).join('<br>'); }
+            box.innerHTML = html; box.style.display = 'block';
         }
-
         function optimizeAlgorithm(algoKey) {
-            if (algorithmResults.length === 0) {
-                alert("Primero ejecuta los algoritmos para tener datos de optimización");
-                return;
-            }
-
+            if (algorithmResults.length === 0) { alert("Primero ejecuta los algoritmos"); return; }
             const result = algorithmResults.find(r => r.algorithm === algorithmInstances[algoKey].name);
-            if (!result) {
-                alert(`No hay resultados de ${algorithmInstances[algoKey].name}`);
-                return;
-            }
-
-            logger.info(`Optimizando ${algorithmInstances[algoKey].name}...`);
-            
+            if (!result) { alert("No hay resultados de " + algorithmInstances[algoKey].name); return; }
+            logger.info("Optimizando " + algorithmInstances[algoKey].name + "...");
             const lines = result.metrics.totalLines;
-            
             if (algoKey === 'fourier') {
-                if (lines > 150) {
-                    algorithmInstances[algoKey].setMinDistance(20);
-                    logger.info(`Fourier: demasiadas líneas (${lines}), aumentando minDistance a 20`);
-                } else if (lines < 50) {
-                    algorithmInstances[algoKey].setMinDistance(10);
-                    logger.info(`Fourier: pocas líneas (${lines}), reduciendo minDistance a 10`);
-                }
+                if (lines > 150) { algorithmInstances[algoKey].setMinDistance(20); logger.info("Fourier: aumentando minDistance a 20"); }
+                else if (lines < 50) { algorithmInstances[algoKey].setMinDistance(10); logger.info("Fourier: reduciendo minDistance a 10"); }
+            } else if (algoKey === 'echo') {
+                if (lines < 30) { lineValidator.minCoverage = Math.max(0.3, lineValidator.minCoverage - 0.05); lineValidator.minRunRatio = Math.max(0.3, lineValidator.minRunRatio - 0.05); logger.info("Echo Radar: relajando umbrales"); }
             }
-
-            alert(`Parámetros de ${algorithmInstances[algoKey].name} ajustados. Ejecuta de nuevo para ver resultados.`);
+            alert("Parámetros ajustados. Ejecuta de nuevo.");
         }
-
-        function selectAll() {
-            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true);
-            logger.info("Todos los algoritmos seleccionados");
-        }
-
-        function deselectAll() {
-            document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false);
-            logger.info("Todos los algoritmos deseleccionados");
-        }
-
+        function selectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = true); logger.info("Todos seleccionados"); }
+        function deselectAll() { document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => cb.checked = false); logger.info("Todos deseleccionados"); }
         function handleImageLoad(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+            const file = event.target.files[0]; if (!file) return;
             logger.info("Cargando: " + file.name);
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
+                    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
                     currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
                     lineValidator.invalidate();
                     if (typeof preprocessor !== 'undefined' && preprocessor.clearCache) preprocessor.clearCache();
-                    selector.history = [];
-                    algorithmResults = [];
-                    currentImageProfile = null;
-                    canvasManager.clearLayers();
-                    document.getElementById('layerControls').innerHTML = '';
-                    document.getElementById('diagnosisBox').style.display = 'none';
-                    document.getElementById('analysisBox').style.display = 'none';
-
-                    setTimeout(() => {
-                        canvasManager.loadImage(currentImageData);
-                        document.getElementById('runButton').disabled = false;
-                        document.getElementById('imgInfo').textContent = img.width + 'x' + img.height;
-                        logger.info("Imagen cargada: " + img.width + "x" + img.height);
-                    }, 100);
+                    selector.history = []; algorithmResults = []; currentImageProfile = null;
+                    canvasManager.clearLayers(); document.getElementById('layerControls').innerHTML = '';
+                    document.getElementById('diagnosisBox').style.display = 'none'; document.getElementById('analysisBox').style.display = 'none';
+                    setTimeout(() => { canvasManager.loadImage(currentImageData); document.getElementById('runButton').disabled = false; document.getElementById('imgInfo').textContent = img.width + 'x' + img.height; logger.info("Imagen cargada: " + img.width + "x" + img.height); }, 100);
                 };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
-
         async function runAlgorithms() {
             if (!currentImageData || isRunning) return;
-
             const selected = Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(cb => cb.value);
-            if (selected.length === 0) {
-                logger.error("No hay algoritmos seleccionados");
-                return;
-            }
-
-            isRunning = true;
-            cancelRequested = false;
-            algorithmResults = [];
-            canvasManager.clearLayers();
-            document.getElementById('layerControls').innerHTML = '';
+            if (selected.length === 0) { logger.error("No hay algoritmos seleccionados"); return; }
+            isRunning = true; cancelRequested = false; algorithmResults = [];
+            canvasManager.clearLayers(); document.getElementById('layerControls').innerHTML = '';
             document.getElementById('diagnosisBox').style.display = 'none';
-            document.getElementById('runButton').disabled = true;
-            document.getElementById('cancelButton').style.display = 'inline-block';
-
+            document.getElementById('runButton').disabled = true; document.getElementById('cancelButton').style.display = 'inline-block';
             logger.info("Algoritmos a ejecutar: " + selected.join(", "));
-
             for (let i = 0; i < selected.length; i++) {
-                if (cancelRequested) {
-                    logger.info("Ejecucion cancelada");
-                    break;
-                }
-
+                if (cancelRequested) { logger.info("Ejecucion cancelada"); break; }
                 const algoName = selected[i];
                 showStatus("Procesando " + algoName + "... (" + (i+1) + "/" + selected.length + ")");
                 await new Promise(r => setTimeout(r, 30));
-
                 try {
                     const result = await runner.runAlgorithm(algoName, currentImageData);
                     algorithmResults.push(result);
-
                     canvasManager.addLayer(result.algorithm, (ctx) => {
-                        ctx.strokeStyle = result.color;
-                        ctx.lineWidth = 2;
-                        result.lines.forEach(line => {
-                            ctx.beginPath();
-                            ctx.moveTo(line.x1, line.y1);
-                            ctx.lineTo(line.x2, line.y2);
-                            ctx.stroke();
-                        });
+                        ctx.strokeStyle = result.color; ctx.lineWidth = 2;
+                        result.lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke(); });
                     });
-
                     logger.info(result.algorithm + ": " + result.metrics.totalLines + " lineas en " + result.metrics.executionTime + "ms");
-                } catch (e) {
-                    logger.error("Error en " + algoName + ": " + e.message);
-                }
-
+                } catch (e) { logger.error("Error en " + algoName + ": " + e.message); }
                 await new Promise(r => setTimeout(r, 0));
             }
-
             hideStatus();
-
             if (algorithmResults.length > 0 && !cancelRequested) {
-                try {
-                    const diagnosis = selector.analyze(algorithmResults, currentImageData);
-                    showDiagnosis(diagnosis);
-                    updateLayerControls();
-                } catch (e) {
-                    logger.error("Error en diagnostico: " + e.message);
-                }
+                try { const diagnosis = selector.analyze(algorithmResults, currentImageData); showDiagnosis(diagnosis); updateLayerControls(); }
+                catch (e) { logger.error("Error en diagnostico: " + e.message); }
             }
-
-            isRunning = false;
-            document.getElementById('runButton').disabled = false;
-            document.getElementById('cancelButton').style.display = 'none';
+            isRunning = false; document.getElementById('runButton').disabled = false; document.getElementById('cancelButton').style.display = 'none';
         }
-
         function showDiagnosis(diagnosis) {
             const box = document.getElementById('diagnosisBox');
-            let html = '<strong>🏆 ' + diagnosis.best + '</strong><br>';
+            let html = '<strong style="color:#FFD700;">🏆 ' + diagnosis.best + '</strong><br>';
             html += diagnosis.reasons.map(r => '• ' + r).join('<br>');
-
             if (diagnosis.ranking && diagnosis.ranking.length > 1) {
                 html += '<br><br><strong>Ranking:</strong><br>';
-                html += diagnosis.ranking.map((r, i) =>
-                    (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) +
-                    ' (' + r.metrics.totalLines + ' lineas)'
-                ).join('<br>');
+                html += diagnosis.ranking.map((r, i) => (i+1) + '. ' + r.algorithm + ' — ' + r.score.toFixed(3) + ' (' + r.metrics.totalLines + ' lineas)').join('<br>');
             }
-
-            box.innerHTML = html;
-            box.style.display = 'block';
-
-            logger.info("Mejor algoritmo: " + diagnosis.best);
-            diagnosis.reasons.forEach(r => logger.info("  " + r));
+            box.innerHTML = html; box.style.display = 'block';
+            logger.info("Mejor algoritmo: " + diagnosis.best); diagnosis.reasons.forEach(r => logger.info("  " + r));
         }
-
         function updateLayerControls() {
             const container = document.getElementById('layerControls');
             container.innerHTML = '<strong>Capas (toca para mostrar/ocultar):</strong><br>';
-
             algorithmResults.forEach(result => {
-                const toggle = document.createElement('div');
-                toggle.className = 'layer-toggle';
-                toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' +
-                                   result.algorithm + ': ' + result.metrics.totalLines;
-                
-                const exportBtn = document.createElement('button');
-                exportBtn.textContent = '💾';
+                const toggle = document.createElement('div'); toggle.className = 'layer-toggle';
+                toggle.innerHTML = '<span class="color-dot" style="background:' + result.color + ';"></span>' + result.algorithm + ': ' + result.metrics.totalLines;
+                const exportBtn = document.createElement('button'); exportBtn.textContent = '💾';
                 exportBtn.style.cssText = 'margin-left:10px;padding:4px 8px;font-size:12px;background:#2196F3;';
-                exportBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    canvasManager.exportLayer(result.algorithm);
-                };
+                exportBtn.onclick = (e) => { e.stopPropagation(); canvasManager.exportLayer(result.algorithm); };
                 toggle.appendChild(exportBtn);
-                
-                toggle.onclick = () => {
-                    canvasManager.toggleLayer(result.algorithm);
-                    toggle.classList.toggle('inactive');
-                };
+                toggle.onclick = () => { canvasManager.toggleLayer(result.algorithm); toggle.classList.toggle('inactive'); };
                 container.appendChild(toggle);
             });
         }
-
-        function cancelExecution() {
-            cancelRequested = true;
-            logger.info("Cancelacion solicitada...");
-        }
-
-        function showStatus(text) {
-            const el = document.getElementById('statusIndicator');
-            el.textContent = text;
-            el.style.display = 'block';
-        }
-
-        function hideStatus() {
-            document.getElementById('statusIndicator').style.display = 'none';
-        }
-
-        function copyLog() {
-            const text = logger.getLogsText();
-            navigator.clipboard.writeText(text).then(() => {
-                alert("Log copiado");
-            }).catch(err => {
-                logger.error("Error al copiar: " + err);
-            });
-        }
-
-        function clearLog() {
-            logger.logs = [];
-            logger.startTime = Date.now();
-            updateLog();
-        }
-
-        function updateLog() {
-            const container = document.getElementById('logContainer');
-            container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>');
-            container.scrollTop = container.scrollHeight;
-        }
-
+        function cancelExecution() { cancelRequested = true; logger.info("Cancelacion solicitada..."); }
+        function showStatus(text) { const el = document.getElementById('statusIndicator'); el.textContent = text; el.style.display = 'block'; }
+        function hideStatus() { document.getElementById('statusIndicator').style.display = 'none'; }
+        function copyLog() { navigator.clipboard.writeText(logger.getLogsText()).then(() => alert("Log copiado")).catch(err => logger.error("Error: " + err)); }
+        function clearLog() { logger.logs = []; logger.startTime = Date.now(); updateLog(); }
+        function updateLog() { const container = document.getElementById('logContainer'); container.innerHTML = logger.getLogs().map(l => '[' + l.timestamp + 'ms] [' + l.level + '] ' + l.message).join('<br>'); container.scrollTop = container.scrollHeight; }
         setInterval(updateLog, 500);
         window.addEventListener("load", initApp);
     </script>
