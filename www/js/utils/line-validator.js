@@ -43,45 +43,79 @@ class LineValidator {
     if (this.bin && this.w === w && this.h === h) return this;
     const t0 = Date.now();
     const d = imageData.data;
-    const gray = new Float32Array(w * h);
-    let gsum = 0;
-    for (let i = 0, j = 0; i < d.length; i += 4, j++) {
-      const v = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-      gray[j] = v; gsum += v;
-    }
-    this.inverted = (gsum / (w * h)) < 110;
-    if (this.inverted) for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
-
-    const iw = w + 1;
-    const integ = new Float64Array(iw * (h + 1));
-    for (let y = 0; y < h; y++) {
-      let rs = 0;
-      for (let x = 0; x < w; x++) {
-        rs += gray[y * w + x];
-        integ[(y + 1) * iw + (x + 1)] = rs + integ[y * iw + (x + 1)];
-      }
-    }
+    
+    // 1. Calcular tamaño de ventana y radio (half)
     let win = Math.max(9, Math.round(Math.min(w, h) / this.windowDivisor));
     if (win % 2 === 0) win++;
     const half = (win - 1) / 2;
-    const k = 1 - this.bradleyT / 100;
-    const bin = new Uint8Array(w * h);
-    const rowSum = new Int32Array(h), colSum = new Int32Array(w);
-    for (let y = 0; y < h; y++) {
-      const y1 = Math.max(0, y - half), y2 = Math.min(h - 1, y + half);
-      for (let x = 0; x < w; x++) {
-        const x1 = Math.max(0, x - half), x2 = Math.min(w - 1, x + half);
-        const cnt = (x2 - x1 + 1) * (y2 - y1 + 1);
-        const s = integ[(y2+1)*iw + (x2+1)] - integ[y1*iw + (x2+1)]
-                - integ[(y2+1)*iw + x1] + integ[y1*iw + x1];
-        if (gray[y * w + x] < (s / cnt) * k) {
-          bin[y * w + x] = 1; rowSum[y]++; colSum[x]++;
+
+    // 2. Crear array con padding (edge replication) para evitar distorsión en bordes
+    const pw = w + 2 * half;
+    const ph = h + 2 * half;
+    const gray = new Float32Array(pw * ph);
+    let gsum = 0;
+    
+    for (let y = 0; y < ph; y++) {
+      for (let x = 0; x < pw; x++) {
+        // Coordenadas originales con clamp (replica el borde)
+        const ox = Math.max(0, Math.min(w - 1, x - half));
+        const oy = Math.max(0, Math.min(h - 1, y - half));
+        const idx = (oy * w + ox) * 4;
+        const v = 0.299 * d[idx] + 0.587 * d[idx+1] + 0.114 * d[idx+2];
+        gray[y * pw + x] = v;
+        
+        // Sumar solo el área original para el cálculo de brillo promedio
+        if (x >= half && x < w + half && y >= half && y < h + half) {
+          gsum += v;
         }
       }
     }
+    
+    this.inverted = (gsum / (w * h)) < 110;
+    if (this.inverted) {
+      for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
+    }
+
+    // 3. Calcular imagen integral sobre la imagen con padding
+    const iw = pw + 1;
+    const integ = new Float64Array(iw * (ph + 1));
+    for (let y = 0; y < ph; y++) {
+      let rs = 0;
+      for (let x = 0; x < pw; x++) {
+        rs += gray[y * pw + x];
+        integ[(y + 1) * iw + (x + 1)] = rs + integ[y * iw + (x + 1)];
+      }
+    }
+
+    const k = 1 - this.bradleyT / 100;
+    const bin = new Uint8Array(w * h);
+    const rowSum = new Int32Array(h), colSum = new Int32Array(w);
+    const winArea = win * win; // Ahora siempre es constante, sin recortes
+
+    // 4. Umbralización: la ventana siempre es de tamaño win x win, incluso en bordes
+    for (let y = 0; y < h; y++) {
+      const i_top = y;
+      const i_bottom = y + win;
+      for (let x = 0; x < w; x++) {
+        const j_left = x;
+        const j_right = x + win;
+        
+        const s = integ[i_bottom * iw + j_right] - integ[i_top * iw + j_right]
+                - integ[i_bottom * iw + j_left] + integ[i_top * iw + j_left];
+        
+        const centerVal = gray[(y + half) * pw + (x + half)];
+        
+        if (centerVal < (s / winArea) * k) {
+          bin[y * w + x] = 1; 
+          rowSum[y]++; 
+          colSum[x]++;
+        }
+      }
+    }
+    
     this.bin = bin; this.w = w; this.h = h;
     this.rowSum = rowSum; this.colSum = colSum;
-    logger.info('  Evidencia lista (Bradley t=' + this.bradleyT + '%, win=' + win + ', invertido=' + this.inverted + ') en ' + (Date.now() - t0) + 'ms');
+    logger.info('  Evidencia lista (Bradley t=' + this.bradleyT + '%, win=' + win + ', invertido=' + this.inverted + ', padding=OK) en ' + (Date.now() - t0) + 'ms');
     return this;
   }
 
