@@ -29,19 +29,26 @@ class LatticeRadar {
     return {algorithm:this.name,color:this.color,lines:lines,metrics:{totalLines:lines.length,executionTime:time,hBase:ys.length}};
   }
   empty(t0){ return {algorithm:this.name,color:this.color,lines:[],metrics:{totalLines:0,executionTime:Date.now()-t0}}; }
+  
   peaks(arr,minDist,ratio){
     const mx=Math.max(...arr); if(mx<=0)return [];
     const sorted=[...arr].sort((a,b)=>a-b), med=sorted[Math.floor(arr.length/2)];
     const th=med+(mx-med)*ratio; const out=[];
-    for(let i=1;i<arr.length-1;i++){
-      if(arr[i]>th&&arr[i]>=arr[i-1]&&arr[i]>=arr[i+1]){
+    // FIX: bucle inclusivo con vecino centinela
+    for(let i=0; i<arr.length; i++){
+      const prev = (i > 0) ? arr[i-1] : -1;
+      const next = (i < arr.length - 1) ? arr[i+1] : -1;
+      if(arr[i]>th && arr[i]>=prev && arr[i]>=next){
         let close=false;
-        for(let j=0;j<out.length;j++){if(Math.abs(out[j]-i)<minDist){if(arr[i]>arr[out[j]])out[j]=i;close=true;break;}}
+        for(let j=0;j<out.length;j++){
+          if(Math.abs(out[j]-i)<minDist){ if(arr[i]>arr[out[j]])out[j]=i; close=true; break; }
+        }
         if(!close)out.push(i);
       }
     }
     return out.sort((a,b)=>a-b);
   }
+  
   crossScore(bin,w,h,x,ys){
     let hit=0;
     for(const y of ys){
@@ -54,6 +61,7 @@ class LatticeRadar {
     }
     return hit/ys.length;
   }
+  
   stability(bin,w,h,x,bands,bh){
     const ps=[];
     for(let b=0;b<bands;b++){
@@ -69,6 +77,7 @@ class LatticeRadar {
     const m=ps.reduce((a,b)=>a+b,0)/ps.length;
     return Math.sqrt(ps.reduce((s,v)=>s+(v-m)*(v-m),0)/ps.length);
   }
+  
   regularGrid(cands){
     if(cands.length<3)return cands.map(c=>({x:c.x}));
     const xs=cands.map(c=>c.x).sort((a,b)=>a-b);
