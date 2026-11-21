@@ -1,26 +1,34 @@
 class LineValidator {
   constructor() {
-    // Valores restaurados: los que dieron Echo Radar 70 lineas / score 0.826-0.878
     this.minCoverage = 0.50;
     this.minRunRatio = 0.55;
     this.minSegRatio = 0.60;
     this.gapTolerance = 4;
-
     this.segments = 12;
     this.segMin = 0.35;
     this.bradleyT = 8;
     this.bin = null; this.w = 0; this.h = 0;
     this.rowSum = null; this.colSum = null;
     this.inverted = false;
+    this.currentImageType = 'DESCONOCIDO';
+    this.lastType = null;
   }
 
   invalidate() {
     this.bin = null; this.rowSum = null; this.colSum = null;
+    this.lastType = null;
   }
 
   prepare(imageData) {
     const w = imageData.width, h = imageData.height;
-    if (this.bin && this.w === w && this.h === h) return this;
+    const imageType = this.currentImageType || 'DESCONOCIDO';
+    
+    // Si ya procesamos esta imagen con el mismo tipo, usar caché
+    if (this.bin && this.w === w && this.h === h && this.lastType === imageType) {
+      return this;
+    }
+    this.lastType = imageType;
+    
     const t0 = Date.now();
     const d = imageData.data;
     const gray = new Float32Array(w * h);
@@ -32,40 +40,108 @@ class LineValidator {
     this.inverted = (gsum / (w * h)) < 110;
     if (this.inverted) for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
 
-    const iw = w + 1;
-    const integ = new Float64Array(iw * (h + 1));
-    for (let y = 0; y < h; y++) {
-      let rs = 0;
-      for (let x = 0; x < w; x++) {
-        rs += gray[y * w + x];
-        integ[(y + 1) * iw + (x + 1)] = rs + integ[y * iw + (x + 1)];
+    // DECISIÓN ADAPTATIVA: ¿Usar Sauvola o Bradley?
+    const useSauvola = (
+      imageType === 'TABLA_DENSA_FINA' || 
+      imageType === 'TABLA_DENSA_GRUESA' || 
+      imageType === 'TABLA_OSCURA_FINA' || 
+      imageType === 'TABLA_OSCURA_GRUESA' ||
+      imageType === 'TABLA_COMPLEJA'
+    );
+
+    let bin, rowSum, colSum;
+
+    if (useSauvola) {
+      logger.info('  Preprocesamiento adaptativo: Sauvola (preserva líneas finas en ' + imageType + ')');
+      bin = new Uint8Array(w * h);
+      rowSum = new Int32Array(h);
+      colSum = new Int32Array(w);
+      
+      // Sauvola optimizado con imágenes integrales (sin deskew para mantener coordenadas originales)
+      const windowSize = 15, k = 0.5, R = 128;
+      const half = Math.floor(windowSize / 2);
+      const iw = w + 1;
+      const integral = new Float64Array(iw * (h + 1));
+      const integralSq = new Float64Array(iw * (h + 1));
+
+      for (let y = 0; y < h; y++) {
+        let rowSumInt = 0, rowSumSq = 0;
+        for (let x = 0; x < w; x++) {
+          const val = gray[y * w + x];
+          rowSumInt += val;
+          rowSumSq += val * val;
+          const idx = (y + 1) * iw + (x + 1);
+          integral[idx] = rowSumInt + integral[y * iw + (x + 1)];
+          integralSq[idx] = rowSumSq + integralSq[y * iw + (x + 1)];
+        }
       }
-    }
-    let win = Math.max(9, Math.round(Math.min(w, h) / 12));
-    if (win % 2 === 0) win++;
-    const half = (win - 1) / 2;
-    const k = 1 - this.bradleyT / 100;
-    const bin = new Uint8Array(w * h);
-    const rowSum = new Int32Array(h), colSum = new Int32Array(w);
-    for (let y = 0; y < h; y++) {
-      const y1 = Math.max(0, y - half), y2 = Math.min(h - 1, y + half);
-      for (let x = 0; x < w; x++) {
-        const x1 = Math.max(0, x - half), x2 = Math.min(w - 1, x + half);
-        const cnt = (x2 - x1 + 1) * (y2 - y1 + 1);
-        const s = integ[(y2+1)*iw + (x2+1)] - integ[y1*iw + (x2+1)]
-                - integ[(y2+1)*iw + x1] + integ[y1*iw + x1];
-        if (gray[y * w + x] < (s / cnt) * k) {
-          bin[y * w + x] = 1; rowSum[y]++; colSum[x]++;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const x1 = Math.max(0, x - half);
+          const y1 = Math.max(0, y - half);
+          const x2 = Math.min(w - 1, x + half);
+          const y2 = Math.min(h - 1, y + half);
+          const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+          const i1 = y1 * iw + x1;
+          const i2 = y1 * iw + (x2 + 1);
+          const i3 = (y2 + 1) * iw + x1;
+          const i4 = (y2 + 1) * iw + (x2 + 1);
+
+          const sum = integral[i4] - integral[i2] - integral[i3] + integral[i1];
+          const sumSq = integralSq[i4] - integralSq[i2] - integralSq[i3] + integralSq[i1];
+
+          const mean = sum / count;
+          const variance = (sumSq / count) - (mean * mean);
+          const std = Math.sqrt(Math.max(0, variance));
+          const threshold = mean * (1 + k * (std / R - 1));
+
+          if (gray[y * w + x] < threshold) {
+            bin[y * w + x] = 1;
+            rowSum[y]++;
+            colSum[x]++;
+          }
+        }
+      }
+    } else {
+      logger.info('  Preprocesamiento adaptativo: Bradley t=' + this.bradleyT + '% (rápido)');
+      const iw = w + 1;
+      const integ = new Float64Array(iw * (h + 1));
+      for (let y = 0; y < h; y++) {
+        let rs = 0;
+        for (let x = 0; x < w; x++) {
+          rs += gray[y * w + x];
+          integ[(y + 1) * iw + (x + 1)] = rs + integ[y * iw + (x + 1)];
+        }
+      }
+      let win = Math.max(9, Math.round(Math.min(w, h) / 12));
+      if (win % 2 === 0) win++;
+      const half = (win - 1) / 2;
+      const k = 1 - this.bradleyT / 100;
+      bin = new Uint8Array(w * h);
+      rowSum = new Int32Array(h);
+      colSum = new Int32Array(w);
+      for (let y = 0; y < h; y++) {
+        const y1 = Math.max(0, y - half), y2 = Math.min(h - 1, y + half);
+        for (let x = 0; x < w; x++) {
+          const x1 = Math.max(0, x - half), x2 = Math.min(w - 1, x + half);
+          const cnt = (x2 - x1 + 1) * (y2 - y1 + 1);
+          const s = integ[(y2+1)*iw + (x2+1)] - integ[y1*iw + (x2+1)]
+                  - integ[(y2+1)*iw + x1] + integ[y1*iw + x1];
+          if (gray[y * w + x] < (s / cnt) * k) {
+            bin[y * w + x] = 1; rowSum[y]++; colSum[x]++;
+          }
         }
       }
     }
+
     this.bin = bin; this.w = w; this.h = h;
     this.rowSum = rowSum; this.colSum = colSum;
-    logger.info('  Evidencia lista (Bradley t=' + this.bradleyT + '%, invertido=' + this.inverted + ') en ' + (Date.now() - t0) + 'ms');
+    logger.info('  Evidencia lista en ' + (Date.now() - t0) + 'ms');
     return this;
   }
 
-  // FIX: gapTolerance siempre tiene valor valido, nunca undefined
   measure(start, axis, gapTolerance) {
     let gt = Number(gapTolerance);
     if (!isFinite(gt) || gt < 0) gt = this.gapTolerance;
@@ -141,7 +217,6 @@ class LineValidator {
     return { coverage: hits/(n+1), runRatio: best/(n+1), segRatio: 1, consecutive: 1, end: 0, drift: 0, axis: 'd' };
   }
 
-  // FIX: un solo juego de umbrales, sin depender de campos que pueden faltar
   passes(m) {
     return m.coverage >= this.minCoverage &&
            m.runRatio >= this.minRunRatio &&
