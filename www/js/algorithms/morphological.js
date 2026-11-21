@@ -2,165 +2,124 @@ class Morphological {
   constructor() {
     this.name = 'Morphological';
     this.color = '#808080';
-    this.textRemover = new TextRemover();
     this.kernelSize = 15;
+    this.enhancer = new LineEnhancer();
   }
 
   async detect(imageData) {
-    logger.info('Iniciando Morphological con eliminacion de texto...');
-    const start = Date.now();
-
-    const cleanedImage = this.textRemover.removeText(imageData);
-    const gray = this.toGrayscale(cleanedImage);
-    const binary = this.binarize(gray);
+    logger.info('Iniciando Morphological (con realce de líneas)...');
+    const t0 = Date.now();
     
-    const hLines = this.detectHorizontalLines(binary);
-    const vLines = this.detectVerticalLines(binary);
-    const lines = [...hLines, ...vLines];
+    // Realce de líneas
+    const enhanced = this.enhancer.enhance(imageData);
     
-    const time = Date.now() - start;
+    // Umbralización adaptativa
+    lineValidator.prepare(enhanced);
+    const w = lineValidator.w, h = lineValidator.h, bin = lineValidator.bin;
+    
+    // Kernel horizontal para detectar líneas horizontales
+    const hKernel = this.createKernel(this.kernelSize, 1);
+    const hDilated = this.dilate(bin, w, h, hKernel);
+    
+    // Kernel vertical para detectar líneas verticales
+    const vKernel = this.createKernel(1, this.kernelSize);
+    const vDilated = this.dilate(bin, w, h, vKernel);
+    
+    // Combinar
+    const combined = new Uint8ClampedArray(w * h);
+    for (let i = 0; i < combined.length; i++) {
+      combined[i] = hDilated[i] || vDilated[i] ? 1 : 0;
+    }
+    
+    // Extraer líneas de la imagen combinada
+    const lines = this.extractLines(combined, w, h);
+    const time = Date.now() - t0;
     logger.info('Morphological completado en ' + time + 'ms. Lineas: ' + lines.length);
     
     return {
-      algorithm: this.name, color: this.color, lines: lines,
-      metrics: { totalLines: lines.length, executionTime: time, horizontalLines: hLines.length, verticalLines: vLines.length }
+      algorithm: this.name,
+      color: this.color,
+      lines: lines,
+      metrics: {
+        totalLines: lines.length,
+        executionTime: time
+      }
     };
   }
 
-  toGrayscale(imageData) {
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
-    const gray = new Uint8ClampedArray(width * height);
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      gray[j] = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-    }
-    return { data: gray, width, height };
+  createKernel(kw, kh) {
+    return { width: kw, height: kh };
   }
 
-  binarize(gray) {
-    const data = gray.data;
-    const width = gray.width;
-    const height = gray.height;
-    const binary = new Uint8Array(width * height);
-    for (let i = 0; i < data.length; i++) binary[i] = data[i] < 128 ? 1 : 0;
-    return { data: binary, width, height };
-  }
-
-  detectHorizontalLines(binary) {
-    const data = binary.data;
-    const width = binary.width;
-    const height = binary.height;
-    const eroded = this.erodeHorizontal(data, width, height, this.kernelSize);
-    const dilated = this.dilateHorizontal(eroded, width, height, this.kernelSize);
+  dilate(bin, w, h, kernel) {
+    const result = new Uint8ClampedArray(w * h);
+    const halfW = Math.floor(kernel.width / 2);
+    const halfH = Math.floor(kernel.height / 2);
     
-    const projection = new Array(height).fill(0);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) projection[y] += dilated[y * width + x];
-    }
-    return this.detectLinesFromProjection(projection, 'horizontal', width, height);
-  }
-
-  detectVerticalLines(binary) {
-    const data = binary.data;
-    const width = binary.width;
-    const height = binary.height;
-    const eroded = this.erodeVertical(data, width, height, this.kernelSize);
-    const dilated = this.dilateVertical(eroded, width, height, this.kernelSize);
-    
-    const projection = new Array(width).fill(0);
-    for (let x = 0; x < width; x++) {
-      for (let y = 0; y < height; y++) projection[x] += dilated[y * width + x];
-    }
-    return this.detectLinesFromProjection(projection, 'vertical', width, height);
-  }
-
-  erodeHorizontal(data, width, height, kernelSize) {
-    const result = new Uint8Array(width * height);
-    const half = Math.floor(kernelSize / 2);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        let min = 1;
-        for (let k = -half; k <= half; k++) {
-          const nx = x + k;
-          if (nx >= 0 && nx < width) min = Math.min(min, data[y * width + nx]);
-          else { min = 0; break; }
-        }
-        result[y * width + x] = min;
-      }
-    }
-    return result;
-  }
-
-  dilateHorizontal(data, width, height, kernelSize) {
-    const result = new Uint8Array(width * height);
-    const half = Math.floor(kernelSize / 2);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+    for (let y = halfH; y < h - halfH; y++) {
+      for (let x = halfW; x < w - halfW; x++) {
         let max = 0;
-        for (let k = -half; k <= half; k++) {
-          const nx = x + k;
-          if (nx >= 0 && nx < width) max = Math.max(max, data[y * width + nx]);
-        }
-        result[y * width + x] = max;
-      }
-    }
-    return result;
-  }
-
-  erodeVertical(data, width, height, kernelSize) {
-    const result = new Uint8Array(width * height);
-    const half = Math.floor(kernelSize / 2);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        let min = 1;
-        for (let k = -half; k <= half; k++) {
-          const ny = y + k;
-          if (ny >= 0 && ny < height) min = Math.min(min, data[ny * width + x]);
-          else { min = 0; break; }
-        }
-        result[y * width + x] = min;
-      }
-    }
-    return result;
-  }
-
-  dilateVertical(data, width, height, kernelSize) {
-    const result = new Uint8Array(width * height);
-    const half = Math.floor(kernelSize / 2);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        let max = 0;
-        for (let k = -half; k <= half; k++) {
-          const ny = y + k;
-          if (ny >= 0 && ny < height) max = Math.max(max, data[ny * width + x]);
-        }
-        result[y * width + x] = max;
-      }
-    }
-    return result;
-  }
-
-  detectLinesFromProjection(projection, direction, width, height) {
-    const lines = [];
-    const threshold = Math.max(...projection) * 0.3;
-    let inLine = false, lineStart = 0;
-    
-    for (let i = 0; i < projection.length; i++) {
-      if (projection[i] > threshold) {
-        if (!inLine) { lineStart = i; inLine = true; }
-      } else {
-        if (inLine) {
-          const linePos = Math.floor((lineStart + i) / 2);
-          if (direction === 'horizontal') {
-            lines.push({ x1: 0, y1: linePos, x2: width - 1, y2: linePos, angle: 0, length: width });
-          } else {
-            lines.push({ x1: linePos, y1: 0, x2: linePos, y2: height - 1, angle: 90, length: height });
+        for (let dy = -halfH; dy <= halfH; dy++) {
+          for (let dx = -halfW; dx <= halfW; dx++) {
+            if (bin[(y+dy)*w + (x+dx)]) {
+              max = 1;
+              break;
+            }
           }
-          inLine = false;
+          if (max) break;
+        }
+        result[y * w + x] = max;
+      }
+    }
+    
+    return result;
+  }
+
+  extractLines(bin, w, h) {
+    const lines = [];
+    
+    // Detectar líneas horizontales
+    const hProj = new Array(h).fill(0);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (bin[y * w + x]) hProj[y]++;
+      }
+    }
+    
+    const hThreshold = Math.max(...hProj) * 0.3;
+    for (let y = 1; y < h - 1; y++) {
+      if (hProj[y] > hThreshold && hProj[y] >= hProj[y-1] && hProj[y] >= hProj[y+1]) {
+        let tooClose = false;
+        for (const l of lines) {
+          if (Math.abs(l.y1 - y) < 8) { tooClose = true; break; }
+        }
+        if (!tooClose) {
+          lines.push({ x1: 0, y1: y, x2: w - 1, y2: y, angle: 0, length: w });
         }
       }
     }
+    
+    // Detectar líneas verticales
+    const vProj = new Array(w).fill(0);
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) {
+        if (bin[y * w + x]) vProj[x]++;
+      }
+    }
+    
+    const vThreshold = Math.max(...vProj) * 0.3;
+    for (let x = 1; x < w - 1; x++) {
+      if (vProj[x] > vThreshold && vProj[x] >= vProj[x-1] && vProj[x] >= vProj[x+1]) {
+        let tooClose = false;
+        for (const l of lines) {
+          if (Math.abs(l.x1 - x) < 8) { tooClose = true; break; }
+        }
+        if (!tooClose) {
+          lines.push({ x1: x, y1: 0, x2: x, y2: h - 1, angle: 90, length: h });
+        }
+      }
+    }
+    
     return lines;
   }
 }
