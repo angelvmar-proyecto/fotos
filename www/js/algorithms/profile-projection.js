@@ -58,6 +58,18 @@ class ProfileProjection {
     
     const lines = hLines.concat(vLines);
     
+    // AUDITORÍA DE COORDENADAS: Imprimir primeras y últimas líneas
+    if (hLines.length > 0) {
+      const first3 = hLines.slice(0, 3).map(l => l.y1).join(', ');
+      const last3 = hLines.slice(-3).map(l => l.y1).join(', ');
+      logger.info('  [AUDITORÍA] Horizontales: Primeras Y=[' + first3 + '] | Últimas Y=[' + last3 + '] (Alto imagen: ' + h + ')');
+    }
+    if (vLines.length > 0) {
+      const first3 = vLines.slice(0, 3).map(l => l.x1).join(', ');
+      const last3 = vLines.slice(-3).map(l => l.x1).join(', ');
+      logger.info('  [AUDITORÍA] Verticales: Primeras X=[' + first3 + '] | Últimas X=[' + last3 + '] (Ancho imagen: ' + w + ')');
+    }
+    
     const result = {
       algorithm: this.name,
       color: this.color,
