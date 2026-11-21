@@ -7,24 +7,27 @@ class ProfileProjection {
   async detect(imageData) {
     logger.info('Iniciando Profile Projection (con filtros de calidad)...');
     const t0 = Date.now();
-    
+
     lineValidator.prepare(imageData);
     const w = lineValidator.w, h = lineValidator.h, bin = lineValidator.bin;
-    
+
     const minLengthH = w * 0.40;
     const minLengthV = h * 0.40;
-    
+
     const hProj = new Array(h).fill(0);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if (bin[y * w + x]) hProj[y]++;
       }
     }
-    
+
     const threshold = Math.max(...hProj) * 0.35;
     const hLines = [];
-    for (let y = 1; y < h - 1; y++) {
-      if (hProj[y] > threshold && hProj[y] >= hProj[y-1] && hProj[y] >= hProj[y+1]) {
+    // FIX: recorrer de 0 a h-1 inclusive. Vecino inexistente = -1 (siempre pierde)
+    for (let y = 0; y < h; y++) {
+      const prev = (y > 0) ? hProj[y - 1] : -1;
+      const next = (y < h - 1) ? hProj[y + 1] : -1;
+      if (hProj[y] > threshold && hProj[y] >= prev && hProj[y] >= next) {
         let tooClose = false;
         for (const l of hLines) {
           if (Math.abs(l.y1 - y) < 8) { tooClose = true; break; }
@@ -34,18 +37,21 @@ class ProfileProjection {
         }
       }
     }
-    
+
     const vProj = new Array(w).fill(0);
     for (let x = 0; x < w; x++) {
       for (let y = 0; y < h; y++) {
         if (bin[y * w + x]) vProj[x]++;
       }
     }
-    
+
     const vThreshold = Math.max(...vProj) * 0.35;
     const vLines = [];
-    for (let x = 1; x < w - 1; x++) {
-      if (vProj[x] > vThreshold && vProj[x] >= vProj[x-1] && vProj[x] >= vProj[x+1]) {
+    // FIX: recorrer de 0 a w-1 inclusive
+    for (let x = 0; x < w; x++) {
+      const prev = (x > 0) ? vProj[x - 1] : -1;
+      const next = (x < w - 1) ? vProj[x + 1] : -1;
+      if (vProj[x] > vThreshold && vProj[x] >= prev && vProj[x] >= next) {
         let tooClose = false;
         for (const l of vLines) {
           if (Math.abs(l.x1 - x) < 8) { tooClose = true; break; }
@@ -55,29 +61,42 @@ class ProfileProjection {
         }
       }
     }
-    
+
     const lines = hLines.concat(vLines);
-    
-    // AUDITORÍA DE COORDENADAS: Imprimir primeras y últimas líneas
-    if (hLines.length > 0) {
-      const first3 = hLines.slice(0, 3).map(l => l.y1).join(', ');
-      const last3 = hLines.slice(-3).map(l => l.y1).join(', ');
-      logger.info('  [AUDITORÍA] Horizontales: Primeras Y=[' + first3 + '] | Últimas Y=[' + last3 + '] (Alto imagen: ' + h + ')');
-    }
-    if (vLines.length > 0) {
-      const first3 = vLines.slice(0, 3).map(l => l.x1).join(', ');
-      const last3 = vLines.slice(-3).map(l => l.x1).join(', ');
-      logger.info('  [AUDITORÍA] Verticales: Primeras X=[' + first3 + '] | Últimas X=[' + last3 + '] (Ancho imagen: ' + w + ')');
-    }
-    
+
     const result = {
       algorithm: this.name,
       color: this.color,
       lines: lines,
       metrics: { totalLines: lines.length, executionTime: Date.now() - t0, hLines: hLines.length, vLines: vLines.length }
     };
-    
-    return lineValidator.filterResult(result);
+
+    const filtered = lineValidator.filterResult(result);
+
+    // AUDITORIA: coordenadas y espaciados DESPUES del filtro
+    this.audit(filtered.lines, w, h);
+    filtered.metrics.executionTime = Date.now() - t0;
+    return filtered;
+  }
+
+  audit(lines, w, h) {
+    const hs = lines.filter(l => l.angle === 0).map(l => l.y1).sort((a, b) => a - b);
+    const vs = lines.filter(l => l.angle === 90).map(l => l.x1).sort((a, b) => a - b);
+    const gaps = a => a.slice(1).map((v, i) => v - a[i]);
+    const fmt = a => a.length ? a.join(', ') : 'ninguna';
+
+    if (hs.length) {
+      const g = gaps(hs);
+      logger.info('  [AUD-H] Y primero=' + hs[0] + ' ultimo=' + hs[hs.length-1] + ' (alto=' + h + ')');
+      logger.info('  [AUD-H] primeras Y=[' + fmt(hs.slice(0,4)) + '] ultimas Y=[' + fmt(hs.slice(-4)) + ']');
+      logger.info('  [AUD-H] espaciados min=' + Math.min(...g) + ' max=' + Math.max(...g) + ' primeros gaps=[' + fmt(g.slice(0,4)) + ']');
+    }
+    if (vs.length) {
+      const g = gaps(vs);
+      logger.info('  [AUD-V] X primero=' + vs[0] + ' ultimo=' + vs[vs.length-1] + ' (ancho=' + w + ')');
+      logger.info('  [AUD-V] primeras X=[' + fmt(vs.slice(0,4)) + '] ultimas X=[' + fmt(vs.slice(-4)) + ']');
+      logger.info('  [AUD-V] espaciados min=' + Math.min(...g) + ' max=' + Math.max(...g) + ' primeros gaps=[' + fmt(g.slice(0,4)) + ']');
+    }
   }
 }
 window.ProfileProjection = ProfileProjection;
