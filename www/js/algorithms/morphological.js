@@ -9,10 +9,15 @@ class Morphological {
     const t0 = Date.now();
     lineValidator.prepare(imageData);
     const w = lineValidator.w, h = lineValidator.h, bin = lineValidator.bin;
+    
     const hDilated = this.dilate(bin, w, h, this.kernelSize, 1);
     const vDilated = this.dilate(bin, w, h, 1, this.kernelSize);
+    
     const combined = new Uint8ClampedArray(w * h);
-    for (let i = 0; i < combined.length; i++) combined[i] = hDilated[i] || vDilated[i] ? 1 : 0;
+    for (let i = 0; i < combined.length; i++) {
+      combined[i] = hDilated[i] || vDilated[i] ? 1 : 0;
+    }
+    
     const lines = this.extractLines(combined, w, h);
     const time = Date.now() - t0;
     logger.info('Morphological completado en ' + time + 'ms. Lineas: ' + lines.length);
@@ -37,9 +42,13 @@ class Morphological {
   }
   extractLines(bin, w, h) {
     const lines = [];
+    // Si el kernel es pequeño, subimos el umbral para ignorar texto dilatado
+    const thresholdMultiplier = (this.kernelSize <= 7) ? 0.55 : 0.3;
+    
     const hProj = new Array(h).fill(0);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (bin[y * w + x]) hProj[y]++;
-    const hTh = Math.max(...hProj) * 0.3;
+    const hTh = Math.max(...hProj) * thresholdMultiplier;
+    
     for (let y = 1; y < h - 1; y++) {
       if (hProj[y] > hTh && hProj[y] >= hProj[y-1] && hProj[y] >= hProj[y+1]) {
         let close = false;
@@ -47,9 +56,11 @@ class Morphological {
         if (!close) lines.push({ x1: 0, y1: y, x2: w - 1, y2: y, angle: 0, length: w });
       }
     }
+    
     const vProj = new Array(w).fill(0);
     for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) if (bin[y * w + x]) vProj[x]++;
-    const vTh = Math.max(...vProj) * 0.3;
+    const vTh = Math.max(...vProj) * thresholdMultiplier;
+    
     for (let x = 1; x < w - 1; x++) {
       if (vProj[x] > vTh && vProj[x] >= vProj[x-1] && vProj[x] >= vProj[x+1]) {
         let close = false;

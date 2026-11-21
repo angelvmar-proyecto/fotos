@@ -207,6 +207,12 @@ function showAnalysis(p,s){
 function optimizeAlgorithm(key){runTune([algorithmInstances[key].name]);}
 function optimizeSelected(){
   var sel=Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(function(cb){return cb.value;});
+  // Reordenar para que Echo Radar corra antes que Cell Detector
+  if(sel.includes("Cell Detector") && sel.includes("Echo Radar")) {
+    sel = sel.filter(function(n){ return n !== "Echo Radar"; });
+    sel.unshift("Echo Radar");
+    logger.info("⚙️ Reordenando ejecución: Echo Radar correrá antes que Cell Detector");
+  }
   runTune(sel);
 }
 function runTune(names){
@@ -240,6 +246,12 @@ function deselectAll(){document.querySelectorAll('.checkbox-item input[type="che
 async function runAlgorithms(){
   if(!currentImageData||isRunning)return;
   var sel=Array.from(document.querySelectorAll('.checkbox-item input[type="checkbox"]:checked')).map(function(cb){return cb.value;});
+  // Reordenar para que Echo Radar corra antes que Cell Detector
+  if(sel.includes("Cell Detector") && sel.includes("Echo Radar")) {
+    sel = sel.filter(function(n){ return n !== "Echo Radar"; });
+    sel.unshift("Echo Radar");
+    logger.info("⚙️ Reordenando ejecución: Echo Radar correrá antes que Cell Detector");
+  }
   if(!sel.length){logger.error('No hay algoritmos seleccionados');return;}
   isRunning=true;cancelRequested=false;algorithmResults=[];
   canvasManager.clearLayers();
