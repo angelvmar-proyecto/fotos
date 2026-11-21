@@ -7,11 +7,26 @@ class AlgorithmRunner {
   }
   
   async runAlgorithm(name, imageData) {
-    const algo = this.algorithms.get(name);
-    if (!algo) throw new Error(`Algoritmo ${name} no encontrado`);
+    const algo = this.algorithms.find(a => a.name === name);
+    if (!algo) throw new Error("Algoritmo no encontrado: " + name);
     
-    logger.info(`Iniciando ${name}`);
+    // Si es Cell Detector, pasar líneas de Echo Radar
+    if (name === "Cell Detector" && algo.setEchoRadarLines) {
+      const echoRadar = this.algorithms.find(a => a.name === "Echo Radar");
+      if (echoRadar && echoRadar.lastResult && echoRadar.lastResult.lines) {
+        algo.setEchoRadarLines(echoRadar.lastResult.lines);
+        logger.info("  Cell Detector usando líneas de Echo Radar como evidencia");
+      }
+    }
+    
+    logger.info("Iniciando " + name + "...");
     const result = await algo.detect(imageData);
+    
+    // Guardar resultado para uso futuro
+    if (name === "Echo Radar") {
+      algo.lastResult = result;
+    }
+    
     return result;
   }
   
