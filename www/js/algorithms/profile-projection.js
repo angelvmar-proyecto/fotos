@@ -2,18 +2,14 @@ class ProfileProjection {
   constructor() {
     this.name = 'Profile Projection';
     this.color = '#FFFF00';
-    this.enhancer = new LineEnhancer();
   }
 
   async detect(imageData) {
-    logger.info('Iniciando Profile Projection (con realce de líneas)...');
+    logger.info('Iniciando Profile Projection (umbralización directa)...');
     const t0 = Date.now();
     
-    // Realce de líneas
-    const enhanced = this.enhancer.enhance(imageData);
-    
-    // Umbralización adaptativa
-    lineValidator.prepare(enhanced);
+    // Umbralización adaptativa directa (sin Sobel, sin text-remover)
+    lineValidator.prepare(imageData);
     const w = lineValidator.w, h = lineValidator.h, bin = lineValidator.bin;
     
     // Proyección horizontal
@@ -24,7 +20,6 @@ class ProfileProjection {
       }
     }
     
-    // Detectar picos
     const threshold = Math.max(...hProj) * 0.3;
     const hLines = [];
     for (let y = 1; y < h - 1; y++) {
@@ -47,7 +42,6 @@ class ProfileProjection {
       }
     }
     
-    // Detectar picos verticales
     const vThreshold = Math.max(...vProj) * 0.3;
     const vLines = [];
     for (let x = 1; x < w - 1; x++) {
@@ -67,15 +61,8 @@ class ProfileProjection {
     logger.info('Profile Projection completado en ' + time + 'ms. Lineas: ' + lines.length);
     
     return {
-      algorithm: this.name,
-      color: this.color,
-      lines: lines,
-      metrics: {
-        totalLines: lines.length,
-        executionTime: time,
-        hLines: hLines.length,
-        vLines: vLines.length
-      }
+      algorithm: this.name, color: this.color, lines: lines,
+      metrics: { totalLines: lines.length, executionTime: time, hLines: hLines.length, vLines: vLines.length }
     };
   }
 }
