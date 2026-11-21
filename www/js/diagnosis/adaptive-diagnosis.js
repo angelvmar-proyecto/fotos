@@ -1,31 +1,46 @@
 class AdaptiveDiagnosis {
   constructor(){ this.history=[]; this.complements=['Lattice Radar']; }
-  axisOf(l){ return Math.abs(l.x2-l.x1)>=Math.abs(l.y2-l.y1)?'h':'v'; }
-  posOf(l,a){ return a==='h'?(l.y1+l.y2)/2:(l.x1+l.x2)/2; }
+  
+  isHorizontal(line){
+    const angle = line.angle || 0;
+    return angle < 45 || angle > 135;
+  }
+  
+  isVertical(line){
+    const angle = line.angle || 0;
+    return angle >= 45 && angle <= 135;
+  }
+  
   dedupe(lines){
     const out=[];
     const groups={h:[],v:[]};
-    lines.forEach(l=>{const a=this.axisOf(l);groups[a].push({l:a==='h'?0:90,x1:l.x1,y1:l.y1,x2:l.x2,y2:l.y2,pos:this.posOf(l,a)});});
+    lines.forEach(l=>{
+      const isH = this.isHorizontal(l);
+      const pos = isH ? (l.y1+l.y2)/2 : (l.x1+l.x2)/2;
+      groups[isH?'h':'v'].push({angle:isH?0:90,x1:l.x1,y1:l.y1,x2:l.x2,y2:l.y2,pos:pos});
+    });
     let dups=0;
     ['h','v'].forEach(a=>{
       const arr=groups[a].sort((p,q)=>p.pos-q.pos);
       arr.forEach(c=>{
-        const prev=out.filter(o=>o.l===c.l).slice(-1)[0];
+        const prev=out.filter(o=>o.angle===c.angle).slice(-1)[0];
         if(prev&&Math.abs(prev.pos-c.pos)<4){dups++;return;}
         out.push(c);
       });
     });
     return {lines:out,dups:dups};
   }
+  
   offsetOf(c,W,H){
     try{
-      const arr=c.l==='h'?lineValidator.rowSum:lineValidator.colSum;
+      const arr=this.isHorizontal(c)?lineValidator.rowSum:lineValidator.colSum;
       if(!arr)return 0;
       const p=Math.round(c.pos); let best=p,bv=-1;
       for(let k=-8;k<=8;k++){const j=p+k;if(j>=0&&j<arr.length&&arr[j]>bv){bv=arr[j];best=j;}}
       return Math.abs(best-p);
     }catch(e){return 0;}
   }
+  
   evidenceOf(c){
     try{
       if(!lineValidator.bin)return 1;
@@ -33,6 +48,7 @@ class AdaptiveDiagnosis {
       return Math.max(0,Math.min(1,m.coverage));
     }catch(e){return 1;}
   }
+  
   analyze(results,imageData){
     const W=imageData.width,H=imageData.height;
     try{lineValidator.prepare(imageData);}catch(e){}
@@ -43,18 +59,22 @@ class AdaptiveDiagnosis {
     logger.info('  Referencia de completitud: '+ref+' lineas');
     const ranking=pre.map(p=>{
       const L=p.lines, n=L.length;
-      const hs=L.filter(c=>Math.abs(c.angle||0)<45||Math.abs(c.angle||0)>135), vs=L.filter(c=>Math.abs((c.angle||0)-90)<=45);
+      const hs=L.filter(c=>this.isHorizontal(c)), vs=L.filter(c=>this.isVertical(c));
       let evid=0,ghosts=0,offs=0,supported=0;
       L.forEach(c=>{
         c.ev=this.evidenceOf(c); c.off=this.offsetOf(c,W,H);
         evid+=c.ev; offs+=c.off;
         let cross=0;
-        if(Math.abs(c.angle||0)<45||Math.abs(c.angle||0)>135){
-          vs.forEach(v=>{const x=(v.x1+v.x2)/2,y1=Math.min(v.y1,v.y2)-3,y2=Math.max(v.y1,v.y2)+3;
-            if(x>=Math.min(c.x1,c.x2)-3&&x<=Math.max(c.x1,c.x2)+3&&c.pos>=y1&&c.pos<=y2)cross++;});
+        if(this.isHorizontal(c)){
+          vs.forEach(v=>{
+            const x=(v.x1+v.x2)/2,y1=Math.min(v.y1,v.y2)-3,y2=Math.max(v.y1,v.y2)+3;
+            if(x>=Math.min(c.x1,c.x2)-3&&x<=Math.max(c.x1,c.x2)+3&&c.pos>=y1&&c.pos<=y2)cross++;
+          });
         }else{
-          hs.forEach(q=>{const y=(q.y1+q.y2)/2,x1=Math.min(q.x1,q.x2)-3,x2=Math.max(q.x1,q.x2)+3;
-            if(y>=Math.min(c.y1,c.y2)-3&&y<=Math.max(c.y1,c.y2)+3&&c.pos>=x1&&c.pos<=x2)cross++;});
+          hs.forEach(q=>{
+            const y=(q.y1+q.y2)/2,x1=Math.min(q.x1,q.x2)-3,x2=Math.max(q.x1,q.x2)+3;
+            if(y>=Math.min(c.y1,c.y2)-3&&y<=Math.max(c.y1,c.y2)+3&&c.pos>=x1&&c.pos<=x2)cross++;
+          });
         }
         c.cross=cross;
         if(cross>=2)supported++;
@@ -91,7 +111,7 @@ class AdaptiveDiagnosis {
     }
     logger.info('🏆 Mejor: '+(best?best.algorithm+' ('+best.score.toFixed(3)+')':'n/a'));
     this.history.push({best:best?best.algorithm:null,score:best?best.score:0});
-    return {best:best?best.best||best.algorithm:null,reasons:reasons,ranking:ranking,bestLines:best?best.lines:[]};
+    return {best:best?best.algorithm:null,reasons:reasons,ranking:ranking,bestLines:best?best.lines:[]};
   }
 }
 window.AdaptiveDiagnosis=AdaptiveDiagnosis;

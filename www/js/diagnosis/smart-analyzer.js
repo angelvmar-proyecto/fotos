@@ -1,21 +1,54 @@
 class SmartAnalyzer {
   constructor(){ this.imageProfile=null; }
+  
   analyzeImage(imageData){
     const t0=Date.now(), w=imageData.width, h=imageData.height, d=imageData.data;
     let sum=0,mn=255,mx=0;
-    for(let i=0;i<d.length;i+=4){const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];sum+=g;if(g<mn)mn=g;if(g>mx)mx=g;}
+    for(let i=0;i<d.length;i+=4){
+      const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      sum+=g;
+      if(g<mn)mn=g;
+      if(g>mx)mx=g;
+    }
     const mean=sum/(w*h), isDark=mean<128;
+    
     let edges=0,seen=0;
-    for(let y=1;y<h-1;y+=2)for(let x=1;x<w-1;x+=2){const i=(y*w+x)*4;const gx=Math.abs(d[i]-d[i+4]),gy=Math.abs(d[i]-d[(y+1)*w*4+x*4]);seen++;if(Math.sqrt(gx*gx+gy*gy)>30)edges++;}
+    for(let y=1;y<h-1;y+=2){
+      for(let x=1;x<w-1;x+=2){
+        const i=(y*w+x)*4;
+        const gx=Math.abs(d[i]-d[i+4]);
+        const gy=Math.abs(d[i]-d[(y+1)*w*4+x*4]);
+        seen++;
+        if(Math.sqrt(gx*gx+gy*gy)>30)edges++;
+      }
+    }
     const density=(edges/seen)*100;
+    
     const hP=new Array(h).fill(0), vP=new Array(w).fill(0);
-    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=(y*w+x)*4;if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]<mean-25){hP[y]++;vP[x]++;}}
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const i=(y*w+x)*4;
+        if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]<mean-25){
+          hP[y]++;
+          vP[x]++;
+        }
+      }
+    }
+    
     const hPeaks=this.countPeaks(hP,Math.max(4,Math.round(h/120)));
     const vPeaks=this.countPeaks(vP,Math.max(4,Math.round(w/120)));
     const thick=this.thickness(hP,vP);
     const aspect=w/h;
     const type=this.classify({density,isDark,thick,aspect,hPeaks,vPeaks,mean});
-    this.imageProfile={width:w,height:h,aspectRatio:aspect.toFixed(2),meanGray:Math.round(mean),contrast:mx-mn,edgeDensity:density.toFixed(2),isDark,hPeaks,vPeaks,avgLineThickness:thick.toFixed(2),imageType:type,analysisTime:Date.now()-t0};
+    
+    this.imageProfile={
+      width:w,height:h,aspectRatio:aspect.toFixed(2),
+      meanGray:Math.round(mean),contrast:mx-mn,
+      edgeDensity:density.toFixed(2),isDark,
+      hPeaks,vPeaks,avgLineThickness:thick.toFixed(2),
+      imageType:type,analysisTime:Date.now()-t0
+    };
+    
     logger.info('=== ANALISIS DE IMAGEN ===');
     logger.info('Tamano: '+w+'x'+h+' (aspecto: '+aspect.toFixed(2)+')');
     logger.info('Brillo promedio: '+Math.round(mean)+(isDark?' (OSCURA)':' (CLARA)'));
@@ -25,32 +58,53 @@ class SmartAnalyzer {
     logger.info('Grosor promedio de linea: '+thick.toFixed(2)+'px');
     logger.info('Tipo de imagen: '+type);
     logger.info('Tiempo de analisis: '+(Date.now()-t0)+'ms');
+    
     return this.imageProfile;
   }
+  
   countPeaks(p,minDist){
-    const n=p.length, s=new Array(n).fill(0);
-    for(let i=0;i<n;i++){let a=0,c=0;for(let k=-2;k<=2;k++){const j=i+k;if(j>=0&&j<n){a+=p[j];c++;}}s[i]=a/c;}
-    const sorted=[...s].sort((a,b)=>a-b);
-    const med=sorted[Math.floor(n/2)], max=sorted[n-1];
-    const th=med+(max-med)*0.35;
+    const n=p.length;
+    const sorted=[...p].sort((a,b)=>b-a);
+    const threshold=sorted[Math.floor(n*0.1)]*0.3;
     const peaks=[];
+    
     for(let i=1;i<n-1;i++){
-      if(s[i]>th&&s[i]>=s[i-1]&&s[i]>=s[i+1]){
+      if(p[i]>threshold&&p[i]>=p[i-1]&&p[i]>=p[i+1]){
         let close=false;
-        for(let j=0;j<peaks.length;j++){if(Math.abs(peaks[j]-i)<minDist){if(s[i]>s[peaks[j]])peaks[j]=i;close=true;break;}}
+        for(let j=0;j<peaks.length;j++){
+          if(Math.abs(peaks[j]-i)<minDist){
+            if(p[i]>p[peaks[j]])peaks[j]=i;
+            close=true;
+            break;
+          }
+        }
         if(!close)peaks.push(i);
       }
     }
     return peaks.length;
   }
+  
   thickness(hP,vP){
     const wds=[];
-    [hP,vP].forEach(p=>{const mx=Math.max(...p);if(mx<=0)return;const th=mx*0.5;let inp=false,st=0;
-      for(let i=0;i<p.length;i++){if(p[i]>th){if(!inp){inp=true;st=i;}}else if(inp){wds.push(i-st);inp=false;}}});
+    [hP,vP].forEach(p=>{
+      const mx=Math.max(...p);
+      if(mx<=0)return;
+      const th=mx*0.5;
+      let inp=false,st=0;
+      for(let i=0;i<p.length;i++){
+        if(p[i]>th){
+          if(!inp){inp=true;st=i;}
+        }else if(inp){
+          wds.push(i-st);
+          inp=false;
+        }
+      }
+    });
     if(!wds.length)return 1;
     wds.sort((a,b)=>a-b);
     return Math.max(1,wds[Math.floor(wds.length/2)]);
   }
+  
   classify(s){
     if(s.density<8&&s.hPeaks<4&&s.vPeaks<4)return 'FOTO_NATURAL';
     if(s.aspect>2.5&&!s.isDark)return 'TABLA_PANTALLA_PC';
@@ -60,6 +114,7 @@ class SmartAnalyzer {
     if(s.hPeaks>25&&s.vPeaks>12)return 'TABLA_COMPLEJA';
     return 'TABLA_SIMPLE';
   }
+  
   suggestAlgorithms(p){
     const s={primary:[],secondary:[],avoid:[],params:{}};
     switch(p.imageType){
@@ -95,13 +150,16 @@ class SmartAnalyzer {
     }
     return s;
   }
+  
   getRecommendation(){
     if(!this.imageProfile)return null;
     const s=this.suggestAlgorithms(this.imageProfile);
     logger.info('=== RECOMENDACIONES ===');
     logger.info('Algoritmos PRIMARIOS: '+s.primary.join(', '));
     logger.info('Algoritmos SECUNDARIOS: '+s.secondary.join(', '));
-    Object.entries(s.params).forEach(([a,p])=>logger.info('Parametros '+a+': '+JSON.stringify(p)));
+    Object.keys(s.params).forEach(function(a){
+      logger.info('Parametros '+a+': '+JSON.stringify(s.params[a]));
+    });
     return s;
   }
 }
