@@ -43,7 +43,6 @@ class ProfileProjection {
       }
     }
 
-    // Filtro de evidencia SOLO en horizontales (las verticales pasan intactas)
     const hRes = lineValidator.filterResult({
       algorithm: this.name, color: this.color,
       lines: hLines, metrics: { totalLines: hLines.length }
@@ -54,10 +53,14 @@ class ProfileProjection {
     this.audit(lines, w, h);
     const time = Date.now() - t0;
     logger.info('Profile Projection completado en ' + time + 'ms. Lineas: ' + lines.length + ' (H=' + keptH.length + ' V=' + vLines.length + ')');
-    return {
+    
+    const result = {
       algorithm: this.name, color: this.color, lines: lines,
       metrics: { totalLines: lines.length, executionTime: time, hLines: keptH.length, vLines: vLines.length, verticalsUnfiltered: true }
     };
+    
+    // === INTEGRACIÓN DEL POST-PROCESADOR UNIFICADO ===
+    return window.linePostProcessor ? linePostProcessor.process(result, currentImageProfile) : result;
   }
 
   audit(lines, w, h) {
