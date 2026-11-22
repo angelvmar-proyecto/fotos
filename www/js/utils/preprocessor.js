@@ -3,7 +3,7 @@ class Preprocessor {
     this.lastMetrics = {};
   }
 
-  // === NUEVO: Adaptación Inteligente Universal ===
+  // === Adaptación Inteligente Universal (Corregida) ===
   adapt(imageData, profile) {
     logger.info('Adaptando imagen según perfil: ' + profile.imageType);
     const t0 = Date.now();
@@ -13,19 +13,30 @@ class Preprocessor {
     let contrastFactor = 1.0;
     let brightnessOffset = 0;
     const type = profile.imageType;
+    const meanGray = profile.meanGray;
 
-    // 1. AJUSTE DE BRILLO Y CONTRASTE ADAPTATIVO
-    if (type.includes('PANTALLA_PC') || type.includes('OSCURA')) {
-      contrastFactor = 1.35;
-      brightnessOffset = 20;
-      logger.info('  Ajuste: +Contraste (1.35x) y +Brillo (+20) para imagen oscura/pantalla');
+    // 1. AJUSTE DE BRILLO Y CONTRASTE ADAPTATIVO (Más conservador)
+    if (type.includes('PANTALLA_PC')) {
+      // Solo aplicar contraste si la imagen es oscura
+      if (meanGray < 140) {
+        contrastFactor = 1.25;
+        brightnessOffset = 10;
+        logger.info('  Ajuste: Contraste moderado (1.25x) y brillo leve (+10) para pantalla oscura');
+      } else {
+        // Imagen ya clara: solo contraste suave
+        contrastFactor = 1.10;
+        logger.info('  Ajuste: Contraste suave (1.10x) para pantalla clara (brillo=' + meanGray + ')');
+      }
+    } else if (type.includes('OSCURA')) {
+      contrastFactor = 1.30;
+      brightnessOffset = 15;
+      logger.info('  Ajuste: +Contraste (1.30x) y +Brillo (+15) para imagen oscura');
     } else if (type.includes('DENSA_FINA')) {
-      contrastFactor = 1.15;
-      brightnessOffset = 5;
-      logger.info('  Ajuste: Realce suave (1.15x) para preservar líneas finas');
+      contrastFactor = 1.08;
+      logger.info('  Ajuste: Realce muy suave (1.08x) para preservar líneas finas');
     } else if (type.includes('GRUESA')) {
-      contrastFactor = 1.05;
-      logger.info('  Ajuste: Normalización leve (1.05x) para líneas gruesas');
+      contrastFactor = 1.03;
+      logger.info('  Ajuste: Normalización mínima (1.03x) para líneas gruesas');
     }
 
     if (contrastFactor !== 1.0 || brightnessOffset !== 0) {
@@ -39,28 +50,28 @@ class Preprocessor {
       }
     }
 
-    // 2. FILTRO ESPECÍFICO: Suavizado anti-moiré para capturas de pantalla
-    if (type.includes('PANTALLA_PC')) {
-      logger.info('  Aplicando suavizado leve anti-moiré (patrón de pantalla)');
+    // 2. FILTRO ESPECÍFICO: Suavizado anti-moiré MUY SUAVE solo para pantallas oscuras
+    if (type.includes('PANTALLA_PC') && meanGray < 140) {
+      logger.info('  Aplicando suavizado muy suave anti-moiré (solo para pantallas oscuras)');
       const temp = new Uint8ClampedArray(data);
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
+      for (let y = 1; y < h - 1; y += 2) {  // Solo cada 2 píxeles para velocidad
+        for (let x = 1; x < w - 1; x += 2) {
           const idx = (y * w + x) * 4;
           for (let c = 0; c < 3; c++) {
             const sum = temp[idx - w * 4 + c] + temp[idx + c] + temp[idx + w * 4 + c] +
                         temp[idx - 4 + c] + temp[idx + 4 + c];
-            data[idx + c] = Math.round(sum / 5);
+            data[idx + c] = Math.round((data[idx + c] * 3 + sum / 5) / 4);  // 75% original, 25% suavizado
           }
         }
       }
     }
 
-    this.lastMetrics = { contrastFactor, brightnessOffset, type };
+    this.lastMetrics = { contrastFactor, brightnessOffset, type, meanGray };
     logger.info('Adaptación de imagen completada en ' + (Date.now() - t0) + 'ms');
     return new ImageData(data, w, h);
   }
 
-  // === MÉTODOS ORIGINALES (Sauvola, Deskew, etc.) ===
+  // === MÉTODOS ORIGINALES (sin cambios) ===
   process(imageData) {
     logger.info('Preprocesando imagen (Sauvola optimizado + deskew)...');
     const start = Date.now();
