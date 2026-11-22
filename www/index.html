@@ -134,7 +134,7 @@ function initApp(){
     runner=new AlgorithmRunner();
     selector=new AdaptiveDiagnosis();
     smartAnalyzer=new SmartAnalyzer();
-    algorithmInstances={profile:new ProfileProjection(),morph:new Morphological(),radar:new RadarMatcher(),echo:new EchoRadar(),lattice:new LatticeRadar(),fourier:new FourierAnalysis()};
+    algorithmInstances={profile:new ProfileProjection(),morph:new Morphological(),radar:new RadarMatcher(),echo:new EchoRadar(),lattice:new LatticeRadar(),fourier:new FourierAnalysis(),ridge:new RidgeDetector()};
     Object.values(algorithmInstances).forEach(function(a){runner.registerAlgorithm(a);});
     document.getElementById('imageInput').addEventListener('change',handleImageLoad);
     resetTuning();
