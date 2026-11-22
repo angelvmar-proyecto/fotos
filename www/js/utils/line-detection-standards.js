@@ -1,75 +1,78 @@
 // Estándar unificado para detección de líneas
 const LineDetectionStandards = {
-  // === PARÁMETROS UNIVERSALES ===
+  // === PARÁMETROS UNIVERSALES BASE ===
   edgeDetection: {
-    // Detección de bordes de la imagen
-    borderWidth: 3,           // Píxeles de margen para considerar "borde"
-    edgeThreshold: 0.85,      // 85% de la longitud esperada para considerar borde
-    minEdgeStrength: 0.30     // Fuerza mínima para considerar un borde
+    borderWidth: 3,
+    edgeThreshold: 0.85,
+    minEdgeStrength: 0.30
   },
-
   ghostRemoval: {
-    // Eliminación de líneas fantasma
-    minDistance: 8,           // Distancia mínima entre líneas válidas
-    maxDuplicates: 2,         // Máximo de duplicados permitidos antes de fusionar
-    mergeThreshold: 4         // Fusionar líneas si están a menos de 4px
+    minDistance: 8,
+    maxDuplicates: 2,
+    mergeThreshold: 4
   },
-
   lineCompletion: {
-    // Completitud de líneas
-    minLengthRatio: 0.40,     // Línea debe cubrir al menos 40% del eje
-    minCoverage: 0.50,        // 50% de píxeles deben estar presentes
-    maxGap: 15                // Gap máximo permitido dentro de una línea
+    minLengthRatio: 0.40,     // Base: 40% de longitud
+    minCoverage: 0.50,
+    maxGap: 15
   },
-
   spacing: {
-    // Espaciado entre líneas
-    minSpacing: 10,           // Espacio mínimo entre líneas paralelas
-    maxSpacing: 200,          // Espacio máximo (más allá es probablemente error)
-    regularityThreshold: 0.30 // 30% de variación permitida en espaciado regular
+    minSpacing: 10,
+    maxSpacing: 500,          // Base: 500px (suficiente para la mayoría)
+    regularityThreshold: 0.30
   },
-
   alignment: {
-    // Alineación y desfase
-    maxDrift: 3,              // Desviación máxima permitida en píxeles
-    straightnessThreshold: 0.95 // 95% de rectitud requerida
+    maxDrift: 3,
+    straightnessThreshold: 0.95
   },
 
-  // === PARÁMETROS ESPECÍFICOS POR TIPO DE IMAGEN ===
+  // === AJUSTES ESPECÍFICOS POR TIPO DE IMAGEN ===
   imageTypeAdjustments: {
     'TABLA_DENSA_FINA': {
-      minLengthRatio: 0.30,   // Más tolerante con líneas cortas
-      minCoverage: 0.40,      // Menos exigente en cobertura
-      maxGap: 20,             // Permite más gaps
-      minSpacing: 8           // Espaciado más ajustado
+      minLengthRatio: 0.30,   // Más tolerante con líneas cortas/rotas
+      minCoverage: 0.40,
+      maxGap: 20,
+      minSpacing: 8,
+      maxSpacing: 300         // En tablas densas, los espacios no son tan grandes
     },
     'TABLA_DENSA_GRUESA': {
       minLengthRatio: 0.50,
       minCoverage: 0.60,
       maxGap: 10,
-      minSpacing: 15
+      minSpacing: 15,
+      maxSpacing: 400
     },
     'TABLA_COMPLEJA': {
-      minLengthRatio: 0.45,
-      minCoverage: 0.55,
-      maxGap: 12,
-      minSpacing: 12
+      minLengthRatio: 0.40,
+      minCoverage: 0.50,
+      maxGap: 15,
+      minSpacing: 12,
+      maxSpacing: 600
     },
     'TABLA_PANTALLA_PC': {
-      minLengthRatio: 0.60,   // Más exigente (líneas más definidas)
-      minCoverage: 0.70,
-      maxGap: 8,
-      minSpacing: 20
+      minLengthRatio: 0.35,   // Relajado: permite encabezados o celdas combinadas
+      minCoverage: 0.45,
+      maxGap: 25,             // Relajado: permite saltos por artefactos de pantalla
+      minSpacing: 15,
+      maxSpacing: 2000        // CRÍTICO: Las columnas de PC pueden estar muy separadas (ej. 1052px)
+    },
+    'TABLA_ANCHA_OSCURA': {
+      minLengthRatio: 0.35,
+      minCoverage: 0.45,
+      maxGap: 20,
+      minSpacing: 15,
+      maxSpacing: 1500        // CRÍTICO: Tablas anchas tienen grandes espacios
     },
     'TABLA_SIMPLE': {
-      minLengthRatio: 0.50,
-      minCoverage: 0.60,
-      maxGap: 10,
-      minSpacing: 15
+      minLengthRatio: 0.40,
+      minCoverage: 0.50,
+      maxGap: 15,
+      minSpacing: 15,
+      maxSpacing: 800
     }
   },
 
-  // Método para obtener parámetros según tipo de imagen
+  // Método para obtener parámetros fusionados
   getParamsForType: function(imageType) {
     const base = {
       edgeDetection: {...this.edgeDetection},
