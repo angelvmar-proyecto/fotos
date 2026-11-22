@@ -157,7 +157,7 @@ class RadarMatcher {
     const out=[]; arr.forEach(v=>{ if(!out.length||v-out[out.length-1]>=minGap)out.push(v); }); return out;
   }
   
-  segH(bin,w,x1,x2,y){
+  segH(bin,w,x1,x2,y){ const h=bin.length/w;
     let hit=0,tot=0;
     for(let x=x1;x<=x2;x+=2){tot++;
       for(let dy=-2;dy<=2;dy++){const yy=y+dy; if(yy>=0 && yy<h && bin[yy*w+x]){hit++;break;}}} // FIX: yy<h
@@ -171,7 +171,7 @@ class RadarMatcher {
     return tot?hit/tot:0;
   }
   
-  rowSupport(bin,w,y,xs){
+  rowSupport(bin,w,y,xs){ const h=bin.length/w;
     if(!xs.length)return this.segH(bin,w,0,w-1,y);
     let ok=0; xs.forEach(x=>{for(let dy=-2;dy<=2;dy++){const yy=y+dy; if(yy>=0 && yy<h && bin[yy*w+x]){ok++;break;}}}); // FIX: yy<h
     return ok/xs.length;
