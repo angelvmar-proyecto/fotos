@@ -176,7 +176,7 @@ function applySmartSelection(){
   if(!currentImageData){alert('Primero carga una imagen');return;}
   logger.info('=== ANÁLISIS INTELIGENTE DE IMAGEN ===');
   resetTuning();
-  currentImageProfile=smartAnalyzer.analyzeImage(currentImageData);try{lineValidator.setProfile(currentImageProfile.imageType);}catch(e){}
+  currentImageProfile=smartAnalyzer.analyzeImage(currentImageData); try{lineValidator.setProfile(currentImageProfile.imageType);}catch(e){} currentImageData = preprocessor.adapt(currentImageData, currentImageProfile);
   lineValidator.currentImageType = currentImageProfile.imageType;
   var s=smartAnalyzer.getRecommendation();
   var aspect=currentImageData.width/currentImageData.height;
