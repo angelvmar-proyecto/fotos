@@ -4,15 +4,29 @@ class RidgeDetector {
     this.color = '#00FF00';
     this.minRidgeStrength = 30;
     this.minCoverage = 0.10;
-    this.minLineLength = 40;
     this.mergeGap = 3;
   }
 
   async detect(imageData) {
-    logger.info('Iniciando Ridge Detector (Hessiana: valles y crestas, lineas tenues)...');
+    logger.info('Iniciando Ridge Detector (Hessiana adaptativa para lineas tenues)...');
     const t0 = Date.now();
-    const w = imageData.width, h = imageData.height, d = imageData.data;
+    
+    // ADAPTACIÓN: Ajustar umbrales según el perfil
+    if (currentImageProfile && currentImageProfile.type) {
+      const type = currentImageProfile.type;
+      if (type.includes('PANTALLA') || type.includes('GRUESA')) {
+        this.minRidgeStrength = 60; // Ignorar ruido, solo líneas fuertes
+        this.minCoverage = 0.20;
+      } else if (type.includes('FINA') || type.includes('DENSA')) {
+        this.minRidgeStrength = 20; // Ser sensible a líneas de 1px
+        this.minCoverage = 0.08;
+      } else {
+        this.minRidgeStrength = 30;
+        this.minCoverage = 0.10;
+      }
+    }
 
+    const w = imageData.width, h = imageData.height, d = imageData.data;
     const gray = new Float32Array(w * h);
     for (let i = 0, j = 0; i < d.length; i += 4, j++) {
       gray[j] = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
@@ -27,8 +41,6 @@ class RidgeDetector {
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const i = y * w + x, c = gray[i];
-
-        // Perfil perpendicular en X -> lineas VERTICALES
         const l = gray[i-1], r = gray[i+1];
         const valleyX = (c <= l && c <= r) && (c < l || c < r);
         const peakX   = (c >= l && c >= r) && (c > l || c > r);
@@ -41,7 +53,6 @@ class RidgeDetector {
           }
         }
 
-        // Perfil perpendicular en Y -> lineas HORIZONTALES
         const u = gray[i-w], dn = gray[i+w];
         const valleyY = (c <= u && c <= dn) && (c < u || c < dn);
         const peakY   = (c >= u && c >= dn) && (c > u || c > dn);
@@ -57,8 +68,8 @@ class RidgeDetector {
     }
 
     const vCand = [], hCand = [];
-    const vNeed = Math.max(this.minLineLength, Math.round(h * this.minCoverage));
-    const hNeed = Math.max(this.minLineLength, Math.round(w * this.minCoverage));
+    const vNeed = Math.max(10, Math.round(h * this.minCoverage));
+    const hNeed = Math.max(10, Math.round(w * this.minCoverage));
 
     for (let x = 0; x < w; x++) {
       if (vCnt[x] >= vNeed) vCand.push({ pos: x, cnt: vCnt[x], str: vSum[x] / vCnt[x], a: vMin[x], b: vMax[x] });
@@ -103,9 +114,5 @@ class RidgeDetector {
     flush();
     return out;
   }
-
-  setMinRidgeStrength(s) { this.minRidgeStrength = s; }
-  setMinCoverage(c) { this.minCoverage = c; }
-  setMinLineLength(l) { this.minLineLength = l; }
 }
 window.RidgeDetector = RidgeDetector;
