@@ -2,8 +2,8 @@ class RidgeDetector {
   constructor() {
     this.name = 'Ridge Detector';
     this.color = '#00FF00';
-    this.minRidgeStrength = 60;
-    this.minCoverage = 0.25;
+    this.minRidgeStrength = 30;
+    this.minCoverage = 0.10;
     this.minLineLength = 40;
     this.mergeGap = 3;
   }
