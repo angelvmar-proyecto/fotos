@@ -1,186 +1,111 @@
-// Post-procesador unificado para todos los algoritmos de detección de líneas
 class LinePostProcessor {
   constructor() {
     this.standards = LineDetectionStandards;
   }
 
-  // Aplica todos los filtros estandarizados a un resultado
   process(result, imageProfile) {
     if (!result || !result.lines || result.lines.length === 0) return result;
+    if (!imageProfile) return result;
 
     const params = this.standards.getParamsForType(imageProfile.imageType);
-    const w = imageProfile.width;
-    const h = imageProfile.height;
+    const w = imageProfile.width, h = imageProfile.height;
+    const n0 = result.lines.length;
 
-    logger.info('  Post-procesando ' + result.algorithm + ' con estándares unificados...');
+    // 1. Fusionar lineas encimadas (cluster, no pares)
+    let lines = this.mergeClusters(result.lines, params.ghostRemoval.mergeThreshold);
+    const n1 = lines.length;
 
-    // 1. Fusionar líneas duplicadas
-    result.lines = this.mergeDuplicates(result.lines, params.ghostRemoval);
+    // 2. Snap a bordes SOLO si la linea ya llega casi al borde
+    lines = this.snapEdges(lines, params.edgeDetection.borderWidth, w, h);
 
-    // 2. Validar y corregir bordes
-    result.lines = this.validateEdges(result.lines, params.edgeDetection, w, h);
+    // 3. Descartar fragmentos muy cortos (umbral bajo, no arbitrario)
+    lines = this.filterShort(lines, params.lineCompletion.minLengthRatio, w, h);
+    const n2 = lines.length;
 
-    // 3. Filtrar líneas incompletas
-    result.lines = this.filterIncompleteLines(result.lines, params.lineCompletion, w, h);
+    // 4. Coordenadas enteras
+    lines = lines.map(function(l){
+      l.x1 = Math.round(l.x1); l.y1 = Math.round(l.y1);
+      l.x2 = Math.round(l.x2); l.y2 = Math.round(l.y2);
+      return l;
+    });
 
-    // 4. Validar espaciado
-    result.lines = this.validateSpacing(result.lines, params.spacing);
-
-    // 5. Corregir desfase
-    result.lines = this.correctDrift(result.lines, params.alignment);
-
-    // Actualizar métricas
-    result.metrics.totalLines = result.lines.length;
+    result.lines = lines;
+    result.metrics.totalLines = lines.length;
     result.metrics.postProcessed = true;
 
+    logger.info('  Post-proceso ' + result.algorithm + ': ' + n0 + ' -> ' + lines.length +
+                ' (encimadas=-' + (n0 - n1) + ', cortas=-' + (n1 - n2) + ', espaciado=NO FILTRA)');
     return result;
   }
 
-  // Fusiona líneas que están muy cerca
-  mergeDuplicates(lines, params) {
-    if (lines.length < 2) return lines;
+  isH(l) { const a = ((l.angle % 180) + 180) % 180; return a <= 10 || a >= 170; }
+  isV(l) { const a = ((l.angle % 180) + 180) % 180; return Math.abs(a - 90) <= 10; }
+  pos(l) { return this.isH(l) ? (l.y1 + l.y2) / 2 : (l.x1 + l.x2) / 2; }
+  span(l) { return Math.sqrt(Math.pow(l.x2-l.x1,2) + Math.pow(l.y2-l.y1,2)); }
 
-    const merged = [];
-    const used = new Set();
-
-    for (let i = 0; i < lines.length; i++) {
-      if (used.has(i)) continue;
-
-      const line1 = lines[i];
-      let bestMatch = -1;
-      let bestDist = Infinity;
-
-      // Buscar la línea más cercana del mismo tipo
-      for (let j = i + 1; j < lines.length; j++) {
-        if (used.has(j)) continue;
-        const line2 = lines[j];
-
-        // Solo fusionar líneas del mismo eje
-        if (Math.abs(line1.angle - line2.angle) > 10) continue;
-
-        let dist;
-        if (Math.abs(line1.angle) < 10 || Math.abs(line1.angle - 180) < 10) {
-          // Horizontales: comparar Y
-          dist = Math.abs(line1.y1 - line2.y1);
-        } else {
-          // Verticales: comparar X
-          dist = Math.abs(line1.x1 - line2.x1);
-        }
-
-        if (dist < params.mergeThreshold && dist < bestDist) {
-          bestDist = dist;
-          bestMatch = j;
-        }
-      }
-
-      if (bestMatch >= 0) {
-        // Fusionar con la mejor coincidencia
-        const line2 = lines[bestMatch];
-        const mergedLine = this.mergeTwoLines(line1, line2);
-        merged.push(mergedLine);
-        used.add(i);
-        used.add(bestMatch);
-      } else {
-        merged.push(line1);
-        used.add(i);
-      }
-    }
-
-    return merged;
+  score(l) {
+    const cov = (typeof l.coverage === 'number') ? l.coverage : 0.5;
+    const str = (typeof l.strength === 'number') ? Math.min(1, l.strength / 100) : 0.5;
+    return this.span(l) * (0.5 + cov) * (0.7 + str * 0.3);
   }
 
-  mergeTwoLines(line1, line2) {
-    // Tomar la línea con mejor cobertura/longitud
-    const len1 = Math.sqrt(Math.pow(line1.x2 - line1.x1, 2) + Math.pow(line1.y2 - line1.y1, 2));
-    const len2 = Math.sqrt(Math.pow(line2.x2 - line2.x1, 2) + Math.pow(line2.y2 - line2.y1, 2));
-
-    return len1 >= len2 ? line1 : line2;
+  // Agrupa TODAS las lineas a <= gap px y conserva la mejor del grupo
+  mergeClusters(lines, gap) {
+    const self = this;
+    const out = [];
+    [lines.filter(function(l){return self.isH(l);}),
+     lines.filter(function(l){return self.isV(l);}),
+     lines.filter(function(l){return !self.isH(l) && !self.isV(l);})]
+    .forEach(function(group){
+      if (!group.length) return;
+      group.sort(function(a,b){ return self.pos(a) - self.pos(b); });
+      let cluster = [group[0]];
+      const flush = function(){
+        let best = cluster[0], bs = self.score(best);
+        for (let i = 1; i < cluster.length; i++) {
+          const s = self.score(cluster[i]);
+          if (s > bs) { bs = s; best = cluster[i]; }
+        }
+        out.push(best);
+      };
+      for (let i = 1; i < group.length; i++) {
+        if (self.pos(group[i]) - self.pos(cluster[cluster.length-1]) <= gap) cluster.push(group[i]);
+        else { flush(); cluster = [group[i]]; }
+      }
+      flush();
+    });
+    return out;
   }
 
-  // Valida y corrige líneas en los bordes
-  validateEdges(lines, params, w, h) {
-    return lines.map(line => {
-      const isHorizontal = Math.abs(line.angle) < 10 || Math.abs(line.angle - 180) < 10;
-
-      if (isHorizontal) {
-        // Verificar si está en el borde superior o inferior
-        if (line.y1 <= params.borderWidth) {
-          line.y1 = 0;
-          line.y2 = 0;
-        } else if (line.y1 >= h - params.borderWidth) {
-          line.y1 = h - 1;
-          line.y2 = h - 1;
-        }
-        // Asegurar que cubra todo el ancho
-        line.x1 = 0;
-        line.x2 = w - 1;
-      } else {
-        // Verificar si está en el borde izquierdo o derecho
-        if (line.x1 <= params.borderWidth) {
-          line.x1 = 0;
-          line.x2 = 0;
-        } else if (line.x1 >= w - params.borderWidth) {
-          line.x1 = w - 1;
-          line.x2 = w - 1;
-        }
-        // Asegurar que cubra todo el alto
-        line.y1 = 0;
-        line.y2 = h - 1;
+  // Solo extiende si el extremo YA esta a <= margin del borde. No estira lineas internas.
+  snapEdges(lines, margin, w, h) {
+    const self = this;
+    return lines.map(function(l){
+      if (self.isH(l)) {
+        if (Math.min(l.x1, l.x2) <= margin) l.x1 = 0;
+        if (Math.max(l.x1, l.x2) >= w - 1 - margin) l.x2 = w - 1;
+        const y = Math.round((l.y1 + l.y2) / 2);
+        if (y <= margin) { l.y1 = 0; l.y2 = 0; }
+        else if (y >= h - 1 - margin) { l.y1 = h - 1; l.y2 = h - 1; }
+        else { l.y1 = y; l.y2 = y; }
+      } else if (self.isV(l)) {
+        if (Math.min(l.y1, l.y2) <= margin) l.y1 = 0;
+        if (Math.max(l.y1, l.y2) >= h - 1 - margin) l.y2 = h - 1;
+        const x = Math.round((l.x1 + l.x2) / 2);
+        if (x <= margin) { l.x1 = 0; l.x2 = 0; }
+        else if (x >= w - 1 - margin) { l.x1 = w - 1; l.x2 = w - 1; }
+        else { l.x1 = x; l.x2 = x; }
       }
-
-      return line;
+      return l;
     });
   }
 
-  // Filtra líneas que no cumplen con los requisitos de completitud
-  filterIncompleteLines(lines, params, w, h) {
-    return lines.filter(line => {
-      const isHorizontal = Math.abs(line.angle) < 10 || Math.abs(line.angle - 180) < 10;
-      const expectedLength = isHorizontal ? w : h;
-      const actualLength = Math.sqrt(Math.pow(line.x2 - line.x1, 2) + Math.pow(line.y2 - line.y1, 2));
-
-      return actualLength >= expectedLength * params.minLengthRatio;
-    });
-  }
-
-  // Valida que el espaciado entre líneas sea razonable
-  validateSpacing(lines, params) {
-    const horizontals = lines.filter(l => Math.abs(l.angle) < 10 || Math.abs(l.angle - 180) < 10)
-                            .sort((a, b) => a.y1 - b.y1);
-    const verticals = lines.filter(l => Math.abs(l.angle - 90) < 10)
-                          .sort((a, b) => a.x1 - b.x1);
-
-    const validH = this.filterBySpacing(horizontals, 'y1', params);
-    const validV = this.filterBySpacing(verticals, 'x1', params);
-
-    return validH.concat(validV);
-  }
-
-  filterBySpacing(lines, coord, params) {
-    if (lines.length < 2) return lines;
-
-    const valid = [lines[0]];
-    for (let i = 1; i < lines.length; i++) {
-      const prev = valid[valid.length - 1];
-      const dist = lines[i][coord] - prev[coord];
-
-      if (dist >= params.minSpacing && dist <= params.maxSpacing) {
-        valid.push(lines[i]);
-      }
-    }
-
-    return valid;
-  }
-
-  // Corrige pequeñas desviaciones en líneas
-  correctDrift(lines, params) {
-    return lines.map(line => {
-      // Redondear a píxeles enteros para evitar sub-píxel drift
-      line.x1 = Math.round(line.x1);
-      line.y1 = Math.round(line.y1);
-      line.x2 = Math.round(line.x2);
-      line.y2 = Math.round(line.y2);
-      return line;
+  filterShort(lines, ratio, w, h) {
+    const self = this;
+    return lines.filter(function(l){
+      const expected = self.isH(l) ? w : (self.isV(l) ? h : self.span(l));
+      if (!expected) return true;
+      return self.span(l) >= expected * ratio;
     });
   }
 }

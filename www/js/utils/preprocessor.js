@@ -1,77 +1,52 @@
 class Preprocessor {
-  constructor() {
-    this.lastMetrics = {};
-  }
+  constructor() { this.lastMetrics = {}; }
 
-  // === Adaptación Inteligente Universal (Corregida) ===
   adapt(imageData, profile) {
-    logger.info('Adaptando imagen según perfil: ' + profile.imageType);
     const t0 = Date.now();
-    const w = imageData.width, h = imageData.height;
+    const type = (profile && profile.imageType) || 'DEFAULT';
+    const mean = (profile && typeof profile.meanGray === 'number') ? profile.meanGray : 200;
+    const thick = profile ? parseFloat(profile.avgLineThickness) || 1 : 1;
+
+    let contrast = 1.0, bright = 0, reason = 'contraste nativo preservado';
+
+    if (type === 'TABLA_PANTALLA_PC') {
+      contrast = 1.0; bright = 0;
+      reason = 'captura PC: NO se toca el contraste (lineas grises de medio contraste)';
+    } else if (type.indexOf('OSCURA') >= 0) {
+      contrast = 1.25; bright = 12; reason = 'imagen oscura: recuperar contraste';
+    } else if (type === 'TABLA_DENSA_FINA') {
+      contrast = 1.05; bright = 0; reason = 'linea fina: realce minimo';
+    } else {
+      contrast = 1.0; bright = 0; reason = 'sin ajustes necesarios';
+    }
+
+    // Diagnostico de ventana Bradley vs grosor (causa de lineas "huecas")
+    const win = Math.max(9, Math.round(Math.min(imageData.width, imageData.height) / (lineValidator.windowDivisor || 12)));
+    const ratio = win / Math.max(1, thick);
+    if (thick >= 6) {
+      logger.info('  AVISO grosor=' + thick + 'px ventanaBradley=' + win + 'px ratio=' + ratio.toFixed(1) +
+                  (ratio < 5 ? ' (<5: Bradley puede binarizar solo los BORDES de la linea)' : ' (OK)'));
+    }
+
+    this.lastMetrics = { type: type, meanGray: mean, contrast: contrast, bright: bright, bradleyWin: win, thickness: thick };
+
+    if (contrast === 1.0 && bright === 0) {
+      logger.info('  Preproceso ' + type + ': intacta (' + reason + ') en ' + (Date.now() - t0) + 'ms');
+      return imageData;
+    }
+
     const data = new Uint8ClampedArray(imageData.data);
-    
-    let contrastFactor = 1.0;
-    let brightnessOffset = 0;
-    const type = profile.imageType;
-    const meanGray = profile.meanGray;
-
-    // 1. AJUSTE DE BRILLO Y CONTRASTE ADAPTATIVO (Más conservador)
-    if (type.includes('PANTALLA_PC')) {
-      // Solo aplicar contraste si la imagen es oscura
-      if (meanGray < 140) {
-        contrastFactor = 1.25;
-        brightnessOffset = 10;
-        logger.info('  Ajuste: Contraste moderado (1.25x) y brillo leve (+10) para pantalla oscura');
-      } else {
-        // Imagen ya clara: solo contraste suave
-        contrastFactor = 1.10;
-        logger.info('  Ajuste: Contraste suave (1.10x) para pantalla clara (brillo=' + meanGray + ')');
-      }
-    } else if (type.includes('OSCURA')) {
-      contrastFactor = 1.30;
-      brightnessOffset = 15;
-      logger.info('  Ajuste: +Contraste (1.30x) y +Brillo (+15) para imagen oscura');
-    } else if (type.includes('DENSA_FINA')) {
-      contrastFactor = 1.08;
-      logger.info('  Ajuste: Realce muy suave (1.08x) para preservar líneas finas');
-    } else if (type.includes('GRUESA')) {
-      contrastFactor = 1.03;
-      logger.info('  Ajuste: Normalización mínima (1.03x) para líneas gruesas');
-    }
-
-    if (contrastFactor !== 1.0 || brightnessOffset !== 0) {
-      for (let i = 0; i < data.length; i += 4) {
-        for (let c = 0; c < 3; c++) {
-          let val = data[i + c];
-          val += brightnessOffset;
-          val = ((val - 128) * contrastFactor) + 128;
-          data[i + c] = Math.max(0, Math.min(255, val));
-        }
+    for (let i = 0; i < data.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        let v = data[i + c] + bright;
+        v = (v - 128) * contrast + 128;
+        data[i + c] = v < 0 ? 0 : (v > 255 ? 255 : v);
       }
     }
-
-    // 2. FILTRO ESPECÍFICO: Suavizado anti-moiré MUY SUAVE solo para pantallas oscuras
-    if (type.includes('PANTALLA_PC') && meanGray < 140) {
-      logger.info('  Aplicando suavizado muy suave anti-moiré (solo para pantallas oscuras)');
-      const temp = new Uint8ClampedArray(data);
-      for (let y = 1; y < h - 1; y += 2) {  // Solo cada 2 píxeles para velocidad
-        for (let x = 1; x < w - 1; x += 2) {
-          const idx = (y * w + x) * 4;
-          for (let c = 0; c < 3; c++) {
-            const sum = temp[idx - w * 4 + c] + temp[idx + c] + temp[idx + w * 4 + c] +
-                        temp[idx - 4 + c] + temp[idx + 4 + c];
-            data[idx + c] = Math.round((data[idx + c] * 3 + sum / 5) / 4);  // 75% original, 25% suavizado
-          }
-        }
-      }
-    }
-
-    this.lastMetrics = { contrastFactor, brightnessOffset, type, meanGray };
-    logger.info('Adaptación de imagen completada en ' + (Date.now() - t0) + 'ms');
-    return new ImageData(data, w, h);
+    logger.info('  Preproceso ' + type + ': contraste=' + contrast + 'x brillo=+' + bright + ' (' + reason + ') en ' + (Date.now() - t0) + 'ms');
+    return new ImageData(data, imageData.width, imageData.height);
   }
 
-  // === MÉTODOS ORIGINALES (sin cambios) ===
   process(imageData) {
     logger.info('Preprocesando imagen (Sauvola optimizado + deskew)...');
     const start = Date.now();
@@ -80,16 +55,13 @@ class Preprocessor {
     const inverted = this.needsInversion(binary);
     const finalBinary = inverted ? this.invert(binary) : binary;
     if (inverted) logger.info('  Imagen invertida (fondo oscuro detectado)');
-
     const skewAngle = this.detectSkew(finalBinary);
     logger.info('  Angulo de inclinacion: ' + skewAngle.toFixed(2) + ' grados');
-
     let result = finalBinary;
     if (Math.abs(skewAngle) > 0.3) {
       result = this.deskew(finalBinary, skewAngle);
       logger.info('  Deskew aplicado: ' + skewAngle.toFixed(2) + ' grados');
     }
-
     this.lastMetrics.skewAngle = skewAngle;
     this.lastMetrics.inverted = inverted;
     this.lastMetrics.preprocessingTime = Date.now() - start;
@@ -112,7 +84,6 @@ class Preprocessor {
     const half = Math.floor(windowSize / 2), R = 128;
     const integral = new Float64Array((width + 1) * (height + 1));
     const integralSq = new Float64Array((width + 1) * (height + 1));
-
     for (let y = 0; y < height; y++) {
       let rowSum = 0, rowSumSq = 0;
       for (let x = 0; x < width; x++) {
@@ -123,7 +94,6 @@ class Preprocessor {
         integralSq[idx] = rowSumSq + integralSq[y * (width + 1) + (x + 1)];
       }
     }
-
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const x1 = Math.max(0, x - half), y1 = Math.max(0, y - half);
@@ -133,10 +103,9 @@ class Preprocessor {
         const i3 = (y2 + 1) * (width + 1) + x1, i4 = (y2 + 1) * (width + 1) + (x2 + 1);
         const sum = integral[i4] - integral[i2] - integral[i3] + integral[i1];
         const sumSq = integralSq[i4] - integralSq[i2] - integralSq[i3] + integralSq[i1];
-        const mean = sum / count;
-        const variance = (sumSq / count) - (mean * mean);
-        const std = Math.sqrt(Math.max(0, variance));
-        const threshold = mean * (1 + k * (std / R - 1));
+        const m = sum / count;
+        const std = Math.sqrt(Math.max(0, (sumSq / count) - (m * m)));
+        const threshold = m * (1 + k * (std / R - 1));
         binary[y * width + x] = data[y * width + x] < threshold ? 1 : 0;
       }
     }
@@ -183,10 +152,10 @@ class Preprocessor {
         }
       }
     }
-    const mean = projection.reduce((a, b) => a + b, 0) / projection.length;
-    let variance = 0;
-    for (let i = 0; i < projection.length; i++) variance += (projection[i] - mean) ** 2;
-    return variance / projection.length;
+    const m = projection.reduce(function(a,b){return a+b;}, 0) / projection.length;
+    let v = 0;
+    for (let i = 0; i < projection.length; i++) v += Math.pow(projection[i] - m, 2);
+    return v / projection.length;
   }
 
   horizontalProjectionScoreFast(data, width, height, step) {
@@ -196,10 +165,10 @@ class Preprocessor {
         if (data[y * width + x] === 1) projection[Math.floor(y/step)]++;
       }
     }
-    const mean = projection.reduce((a, b) => a + b, 0) / projection.length;
-    let variance = 0;
-    for (let i = 0; i < projection.length; i++) variance += (projection[i] - mean) ** 2;
-    return variance / projection.length;
+    const m = projection.reduce(function(a,b){return a+b;}, 0) / projection.length;
+    let v = 0;
+    for (let i = 0; i < projection.length; i++) v += Math.pow(projection[i] - m, 2);
+    return v / projection.length;
   }
 
   deskew(binary, angle) { return this.rotateBinary(binary, angle); }

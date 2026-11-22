@@ -5,9 +5,7 @@ class SmartAnalyzer {
     let sum=0,mn=255,mx=0;
     for(let i=0;i<d.length;i+=4){
       const g=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-      sum+=g;
-      if(g<mn)mn=g;
-      if(g>mx)mx=g;
+      sum+=g; if(g<mn)mn=g; if(g>mx)mx=g;
     }
     const mean=sum/(w*h), isDark=mean<128;
     let edges=0,seen=0;
@@ -25,10 +23,7 @@ class SmartAnalyzer {
     for(let y=0;y<h;y++){
       for(let x=0;x<w;x++){
         const i=(y*w+x)*4;
-        if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]<mean-25){
-          hP[y]++;
-          vP[x]++;
-        }
+        if(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]<mean-25){ hP[y]++; vP[x]++; }
       }
     }
     const hPeaks=this.countPeaks(hP,Math.max(4,Math.round(h/120)));
@@ -65,8 +60,7 @@ class SmartAnalyzer {
         for(let j=0;j<peaks.length;j++){
           if(Math.abs(peaks[j]-i)<minDist){
             if(p[i]>p[peaks[j]])peaks[j]=i;
-            close=true;
-            break;
+            close=true; break;
           }
         }
         if(!close)peaks.push(i);
@@ -82,12 +76,8 @@ class SmartAnalyzer {
       const th=mx*0.5;
       let inp=false,st=0;
       for(let i=0;i<p.length;i++){
-        if(p[i]>th){
-          if(!inp){inp=true;st=i;}
-        }else if(inp){
-          wds.push(i-st);
-          inp=false;
-        }
+        if(p[i]>th){ if(!inp){inp=true;st=i;} }
+        else if(inp){ wds.push(i-st); inp=false; }
       }
     });
     if(!wds.length)return 1;
@@ -104,42 +94,40 @@ class SmartAnalyzer {
     return 'TABLA_SIMPLE';
   }
   suggestAlgorithms(p){
-    const s={primary:[],secondary:[],avoid:[],params:{}};
+    const s={primary:[],secondary:[],avoid:['Ridge Detector','Morphological'],params:{}};
     switch(p.imageType){
       case 'TABLA_DENSA_FINA':
-        s.primary=['Echo Radar','Cell Detector'];
-        s.secondary=['Profile Projection','Fourier Analysis','Lattice Radar'];
+        s.primary=['Cell Detector','Echo Radar'];
+        s.secondary=['Profile Projection','Fourier Analysis','Line Enhancer','Lattice Radar'];
         s.params={
           'Echo Radar':{minCoverage:0.35,minRunRatio:0.35,gapTolerance:6},
-          'Morphological':{kernelSize:5},
           'Fourier Analysis':{minDistance:8}
         };
         break;
       case 'TABLA_PANTALLA_PC':
-        s.primary=['Morphological','Cell Detector'];
-        s.secondary=['Profile Projection','Lattice Radar'];
+        s.primary=['Cell Detector','Profile Projection'];
+        s.secondary=['Echo Radar','Line Enhancer','Lattice Radar','Fourier Analysis'];
         s.params={
-          'Morphological':{kernelSize:7},
-          'Echo Radar':{minCoverage:0.55,minRunRatio:0.55,gapTolerance:3}
+          'Echo Radar':{minCoverage:0.55,minRunRatio:0.55,gapTolerance:3},
+          'Fourier Analysis':{minDistance:12}
         };
         break;
       case 'TABLA_ANCHA_OSCURA':
-        s.primary=['Echo Radar','Cell Detector'];
-        s.secondary=['Morphological','Fourier Analysis'];
+      case 'TABLA_OSCURA_GRUESA':
+      case 'TABLA_OSCURA_FINA':
+        s.primary=['Cell Detector','Echo Radar'];
+        s.secondary=['Profile Projection','Fourier Analysis','Line Enhancer'];
         s.params={'Echo Radar':{minCoverage:0.4,minRunRatio:0.4,gapTolerance:5}};
         break;
       case 'TABLA_DENSA_GRUESA':
-        s.primary=['Profile Projection','Morphological'];
-        s.secondary=['Echo Radar','Cell Detector'];
-        s.params={
-          'Echo Radar':{minCoverage:0.5,minRunRatio:0.5,gapTolerance:4},
-          'Morphological':{kernelSize:12}
-        };
+        s.primary=['Cell Detector','Profile Projection'];
+        s.secondary=['Echo Radar','Line Enhancer','Fourier Analysis'];
+        s.params={'Echo Radar':{minCoverage:0.5,minRunRatio:0.5,gapTolerance:4}};
         break;
       case 'TABLA_SIMPLE':
-        s.primary=['Profile Projection','Morphological'];
-        s.secondary=['Echo Radar','Cell Detector','Lattice Radar'];
-        s.params={'Morphological':{kernelSize:8}};
+        s.primary=['Cell Detector','Profile Projection'];
+        s.secondary=['Echo Radar','Line Enhancer','Lattice Radar','Fourier Analysis'];
+        s.params={};
         break;
       case 'FOTO_NATURAL':
         s.primary=['Echo Radar','Profile Projection'];
@@ -147,8 +135,8 @@ class SmartAnalyzer {
         s.params={'Echo Radar':{minCoverage:0.45,minRunRatio:0.45,gapTolerance:4}};
         break;
       default:
-        s.primary=['Echo Radar','Profile Projection'];
-        s.secondary=['Morphological','Fourier Analysis','Cell Detector'];
+        s.primary=['Cell Detector','Echo Radar'];
+        s.secondary=['Profile Projection','Fourier Analysis','Line Enhancer'];
         s.params={'Echo Radar':{minCoverage:0.4,minRunRatio:0.4,gapTolerance:5}};
     }
     return s;
