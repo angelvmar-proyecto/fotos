@@ -60,6 +60,7 @@ button:disabled{background:#555;}
 <div class="checkbox-item"><div><input type="checkbox" id="algo_lattice" value="Lattice Radar" checked><span class="color-dot" style="background:#FF1493;"></span><label for="algo_lattice">Lattice Radar (complemento)</label></div><button class="btn-optimize" onclick="optimizeAlgorithm('lattice')">🔧</button></div>
 <div class="checkbox-item"><div><input type="checkbox" id="algo_fourier" value="Fourier Analysis" checked><span class="color-dot" style="background:#FFA500;"></span><label for="algo_fourier">Fourier Analysis</label></div><button class="btn-optimize" onclick="optimizeAlgorithm('fourier')">🔧</button></div>
 <div class="checkbox-item"><div><input type="checkbox" id="algo_ridge" value="Ridge Detector" checked><span class="color-dot" style="background:#00FF00;"></span><label for="algo_ridge">Ridge Detector</label></div><button class="btn-optimize" onclick="optimizeAlgorithm('ridge')">🔧</button></div>
+<div class="checkbox-item"><div><input type="checkbox" id="algo_enhancer" value="Line Enhancer" checked><span class="color-dot" style="background:#00FFFF;"></span><label for="algo_enhancer">Line Enhancer (Lineas tenues)</label></div><button class="btn-optimize" onclick="optimizeAlgorithm('enhancer')">🔧</button></div>
 <br>
 <button onclick="selectAll()">✅ Todos</button>
 <button onclick="deselectAll()">❌ Ninguno</button>
@@ -135,7 +136,7 @@ function initApp(){
     runner=new AlgorithmRunner();
     selector=new AdaptiveDiagnosis();
     smartAnalyzer=new SmartAnalyzer();
-    algorithmInstances={profile:new ProfileProjection(),morph:new Morphological(),radar:new RadarMatcher(),echo:new EchoRadar(),lattice:new LatticeRadar(),fourier:new FourierAnalysis(),ridge:new RidgeDetector()};
+    algorithmInstances={profile:new ProfileProjection(),morph:new Morphological(),radar:new RadarMatcher(),echo:new EchoRadar(),lattice:new LatticeRadar(),fourier:new FourierAnalysis(),ridge:new RidgeDetector(),enhancer:new LineEnhancer()};
     Object.values(algorithmInstances).forEach(function(a){runner.registerAlgorithm(a);});
     document.getElementById('imageInput').addEventListener('change',handleImageLoad);
     resetTuning();
