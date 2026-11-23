@@ -22,7 +22,7 @@ class LineValidator {
       case 'TABLA_COMPLEJA':        t = 7;  div = 15; break;
       case 'TABLA_OSCURA_FINA':     t = 10; div = 15; break;
       case 'TABLA_OSCURA_GRUESA':   t = 10; div = 12; break;
-      case 'TABLA_PANTALLA_PC':     t = 10; div = 20;  break;  // ← FIX: div=6 para líneas gruesas
+      case 'TABLA_PANTALLA_PC':     t = 10; div = 12;  break;  // ← FIX: div=6 para líneas gruesas
       case 'TABLA_ANCHA_OSCURA':    t = 10; div = 12; break;
       case 'TABLA_SIMPLE':          t = 8;  div = 12; break;
       default:                      t = 8;  div = 12; break;
