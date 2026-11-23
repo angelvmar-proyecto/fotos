@@ -22,7 +22,7 @@ class LineValidator {
       case 'TABLA_COMPLEJA':        t = 7;  div = 15; break;
       case 'TABLA_OSCURA_FINA':     t = 10; div = 15; break;
       case 'TABLA_OSCURA_GRUESA':   t = 10; div = 12; break;
-      case 'TABLA_PANTALLA_PC':     t = 10; div = 12; break;
+      case 'TABLA_PANTALLA_PC':     t = 10; div = 6;  break;  // ← FIX: div=6 para líneas gruesas
       case 'TABLA_ANCHA_OSCURA':    t = 10; div = 12; break;
       case 'TABLA_SIMPLE':          t = 8;  div = 12; break;
       default:                      t = 8;  div = 12; break;
@@ -43,40 +43,34 @@ class LineValidator {
     if (this.bin && this.w === w && this.h === h) return this;
     const t0 = Date.now();
     const d = imageData.data;
-    
-    // 1. Calcular tamaño de ventana y radio (half)
+
     let win = Math.max(9, Math.round(Math.min(w, h) / this.windowDivisor));
     if (win % 2 === 0) win++;
     const half = (win - 1) / 2;
 
-    // 2. Crear array con padding (edge replication) para evitar distorsión en bordes
     const pw = w + 2 * half;
     const ph = h + 2 * half;
     const gray = new Float32Array(pw * ph);
     let gsum = 0;
-    
+
     for (let y = 0; y < ph; y++) {
       for (let x = 0; x < pw; x++) {
-        // Coordenadas originales con clamp (replica el borde)
         const ox = Math.max(0, Math.min(w - 1, x - half));
         const oy = Math.max(0, Math.min(h - 1, y - half));
         const idx = (oy * w + ox) * 4;
         const v = 0.299 * d[idx] + 0.587 * d[idx+1] + 0.114 * d[idx+2];
         gray[y * pw + x] = v;
-        
-        // Sumar solo el área original para el cálculo de brillo promedio
         if (x >= half && x < w + half && y >= half && y < h + half) {
           gsum += v;
         }
       }
     }
-    
+
     this.inverted = (gsum / (w * h)) < 110;
     if (this.inverted) {
       for (let i = 0; i < gray.length; i++) gray[i] = 255 - gray[i];
     }
 
-    // 3. Calcular imagen integral sobre la imagen con padding
     const iw = pw + 1;
     const integ = new Float64Array(iw * (ph + 1));
     for (let y = 0; y < ph; y++) {
@@ -90,29 +84,28 @@ class LineValidator {
     const k = 1 - this.bradleyT / 100;
     const bin = new Uint8Array(w * h);
     const rowSum = new Int32Array(h), colSum = new Int32Array(w);
-    const winArea = win * win; // Ahora siempre es constante, sin recortes
+    const winArea = win * win;
 
-    // 4. Umbralización: la ventana siempre es de tamaño win x win, incluso en bordes
     for (let y = 0; y < h; y++) {
       const i_top = y;
       const i_bottom = y + win;
       for (let x = 0; x < w; x++) {
         const j_left = x;
         const j_right = x + win;
-        
+
         const s = integ[i_bottom * iw + j_right] - integ[i_top * iw + j_right]
                 - integ[i_bottom * iw + j_left] + integ[i_top * iw + j_left];
-        
+
         const centerVal = gray[(y + half) * pw + (x + half)];
-        
+
         if (centerVal < (s / winArea) * k) {
-          bin[y * w + x] = 1; 
-          rowSum[y]++; 
+          bin[y * w + x] = 1;
+          rowSum[y]++;
           colSum[x]++;
         }
       }
     }
-    
+
     this.bin = bin; this.w = w; this.h = h;
     this.rowSum = rowSum; this.colSum = colSum;
     logger.info('  Evidencia lista (Bradley t=' + this.bradleyT + '%, win=' + win + ', invertido=' + this.inverted + ', padding=OK) en ' + (Date.now() - t0) + 'ms');

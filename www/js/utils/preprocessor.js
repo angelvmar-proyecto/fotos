@@ -20,7 +20,6 @@ class Preprocessor {
       contrast = 1.0; bright = 0; reason = 'sin ajustes necesarios';
     }
 
-    // Diagnostico de ventana Bradley vs grosor (causa de lineas "huecas")
     const win = Math.max(9, Math.round(Math.min(imageData.width, imageData.height) / (lineValidator.windowDivisor || 12)));
     const ratio = win / Math.max(1, thick);
     if (thick >= 6) {
@@ -30,19 +29,43 @@ class Preprocessor {
 
     this.lastMetrics = { type: type, meanGray: mean, contrast: contrast, bright: bright, bradleyWin: win, thickness: thick };
 
-    if (contrast === 1.0 && bright === 0) {
+    if (contrast === 1.0 && bright === 0 && type !== 'TABLA_PANTALLA_PC') {
       logger.info('  Preproceso ' + type + ': intacta (' + reason + ') en ' + (Date.now() - t0) + 'ms');
       return imageData;
     }
 
     const data = new Uint8ClampedArray(imageData.data);
-    for (let i = 0; i < data.length; i += 4) {
-      for (let c = 0; c < 3; c++) {
-        let v = data[i + c] + bright;
-        v = (v - 128) * contrast + 128;
-        data[i + c] = v < 0 ? 0 : (v > 255 ? 255 : v);
+    
+    // Ajuste de contraste/brillo
+    if (contrast !== 1.0 || bright !== 0) {
+      for (let i = 0; i < data.length; i += 4) {
+        for (let c = 0; c < 3; c++) {
+          let v = data[i + c] + bright;
+          v = (v - 128) * contrast + 128;
+          data[i + c] = v < 0 ? 0 : (v > 255 ? 255 : v);
+        }
       }
     }
+
+    // Filtro Anti-Moiré para PC (Gaussiano 3x3 muy suave)
+    if (type === 'TABLA_PANTALLA_PC') {
+      logger.info('  Aplicando filtro anti-moire (Gaussiano 3x3) para captura PC');
+      const temp = new Uint8ClampedArray(data);
+      const w = imageData.width, h = imageData.height;
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const idx = (y * w + x) * 4;
+          for (let c = 0; c < 3; c++) {
+            const sum = 
+              temp[idx - w*4 + c] * 1 + temp[idx - w*4 + 4 + c] * 2 + temp[idx - w*4 + 8 + c] * 1 +
+              temp[idx + c] * 2 +       temp[idx + 4 + c] * 4 +       temp[idx + 8 + c] * 2 +
+              temp[idx + w*4 + c] * 1 + temp[idx + w*4 + 4 + c] * 2 + temp[idx + w*4 + 8 + c] * 1;
+            data[idx + c] = Math.round(sum / 16);
+          }
+        }
+      }
+    }
+
     logger.info('  Preproceso ' + type + ': contraste=' + contrast + 'x brillo=+' + bright + ' (' + reason + ') en ' + (Date.now() - t0) + 'ms');
     return new ImageData(data, imageData.width, imageData.height);
   }
