@@ -2,7 +2,7 @@ class LineEnhancer {
   constructor() {
     this.name = 'Line Enhancer';
     this.color = '#00FFFF';
-    this.minLength = 12;
+    this.minLength = 15;
     this.projectionThreshold = 0.50; // Umbral base más estricto
     this.edgeMargin = 10; // Zona de borde donde aplicamos umbral más alto
     this.edgeMultiplier = 1.3; // Multiplicador de umbral para bordes (30% más exigente)
@@ -24,7 +24,7 @@ class LineEnhancer {
       } else if (type.includes('GRUESA') || type.includes('PANTALLA')) {
         this.minLength = 20;
       } else {
-        this.minLength = 12;
+        this.minLength = 15;
       }
     }
     

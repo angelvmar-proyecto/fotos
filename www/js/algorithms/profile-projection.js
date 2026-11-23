@@ -15,7 +15,7 @@ class ProfileProjection {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) { if (bin[y * w + x]) hProj[y]++; }
     }
-    const hTh = Math.max(...hProj) * 0.35;
+    const hTh = Math.max(...hProj) * 0.45;
     const hLines = [];
     for (let y = 0; y < h; y++) {
       const prev = (y > 0) ? hProj[y - 1] : -1;
@@ -31,7 +31,7 @@ class ProfileProjection {
     for (let x = 0; x < w; x++) {
       for (let y = 0; y < h; y++) { if (bin[y * w + x]) vProj[x]++; }
     }
-    const vTh = Math.max(...vProj) * 0.35;
+    const vTh = Math.max(...vProj) * 0.45;
     const vLines = [];
     for (let x = 0; x < w; x++) {
       const prev = (x > 0) ? vProj[x - 1] : -1;

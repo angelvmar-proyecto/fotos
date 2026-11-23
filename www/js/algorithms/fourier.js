@@ -46,7 +46,7 @@ class FourierAnalysis {
     const peaks = [];
     const mx = Math.max(...proj);
     if (mx <= 0) return peaks;
-    const th = mx * 0.35;
+    const th = mx * 0.45;
     for (let i = 0; i < proj.length; i++) {
       const prev = (i > 0) ? proj[i-1] : -1;
       const next = (i < proj.length - 1) ? proj[i+1] : -1;
